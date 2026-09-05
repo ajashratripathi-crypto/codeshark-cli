@@ -19,14 +19,10 @@ An open-source coding agent that reads your project, plans the work, edits files
 
 Requires **Node.js 18.17 or later** and npm.
 
-### Install from source
+### Install with npm
 
 ```bash
-git clone https://github.com/ajashratripathi-crypto/codeshark-cli.git
-cd codeshark-cli
-npm install
-npm run build
-npm install -g .
+npm install -g codeshark-cli
 ```
 
 Then open the project you want to work on:
@@ -43,11 +39,27 @@ codeshark --folder . "explain this project"
 codeshark --folder . "find and fix the failing tests"
 ```
 
-Once a release is available on npm, you can install it with `npm install -g codeshark-cli`, or run it with `npx codeshark-cli --folder .`.
+Or run without a global installation:
 
-CodeShark works with project folders. Run it from your project directory or choose a folder with `--folder` or `--cwd`. If the command is not recognized after building this repository, use `node dist/index.js --folder .` from the checkout.
+```bash
+npx codeshark-cli --folder .
+```
+
+CodeShark works with project folders. Run it from your project directory or choose a folder with `--folder` or `--cwd`.
 
 On first launch, follow the connection setup and accept the [Terms](TERMS.md). The shared gateway lets you start without a personal API key; its free lanes are shared, rate-limited, and subject to availability.
+
+### Install from source
+
+```bash
+git clone https://github.com/ajashratripathi-crypto/codeshark-cli.git
+cd codeshark-cli
+npm install
+npm run build
+npm install -g .
+```
+
+For contributors or anyone who prefers a local build. If the command is not recognized after building, use `node dist/index.js --folder .` from the checkout.
 
 ## Everyday commands
 
