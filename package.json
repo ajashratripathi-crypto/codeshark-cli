@@ -1,7 +1,7 @@
 {
   "name": "codeshark-cli",
   "version": "0.1.3",
-  "description": "An open-source terminal coding agent. Five frontier models, zero setup, no API keys required.",
+  "description": "An open-source terminal coding agent. Eight model choices, project tools, and approval before every tool action.",
   "type": "module",
   "bin": {
     "codeshark": "./dist/index.js"
@@ -16,11 +16,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/codeshark/codeshark.git"
+    "url": "https://github.com/ajashratripathi-crypto/codeshark-cli.git"
   },
-  "homepage": "https://github.com/codeshark/codeshark",
+  "homepage": "https://github.com/ajashratripathi-crypto/codeshark-cli#readme",
   "bugs": {
-    "url": "https://github.com/codeshark/codeshark/issues"
+    "url": "https://github.com/ajashratripathi-crypto/codeshark-cli/issues"
   },
   "publishConfig": {
     "access": "public"
@@ -42,7 +42,6 @@
     "ai",
     "agent",
     "coding-agent",
-    "unorouter",
     "terminal",
     "llm"
   ],

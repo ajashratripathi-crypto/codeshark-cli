@@ -1,274 +1,191 @@
-# CodeShark
+﻿# CODESHARK
 
-An open-source **terminal coding agent** — five
-frontier models (GPT-5.6 Sol, DeepSeek-V4 Flash, GLM 5.3 Flash Thinking,
-Kimi-K3, Gemini 3.6 Flash) behind one OpenAI-compatible endpoint.
+### Your terminal. Teeth included.
 
-Run `codeshark banner` to see the CodeShark wordmark in your terminal.
+An open-source coding agent that reads your project, plans the work, edits files, and runs commands—with your approval. Eight model choices, one familiar terminal.
 
-## How it works
+[Source code](https://github.com/ajashratripathi-crypto/codeshark-cli) · [Get started](#quick-start) · [Models](#models) · [Website setup](#publish-the-website-with-github-pages) · [MIT license](LICENSE)
 
-Everything routes through **UnoRouter** (`https://api.unorouter.com/v1`), one
-OpenAI-compatible endpoint. CodeShark ships with a zero-setup **community
-gateway**, so you can start without configuring anything; bring your own
-UnoRouter key whenever you want your own rate limits and private prompts.
+## What you can do
 
-The gateway strictly serves only UnoRouter's `:free` lane identifiers — any
-other identifier is refused, so there is no paid path through the gateway.
+- **Explore a codebase.** Search files, trace an implementation, and ask how the pieces fit together.
+- **Plan before building.** Use `/plan` to work through an approach, then `/build` to start implementing.
+- **Fix and build.** Make focused changes and run relevant commands in your selected project folder.
+- **Choose your model.** Switch between eight catalog models from the conversation.
+- **Stay involved.** Every tool action asks for approval before it runs.
+- **Choose your connection.** Start with the community gateway, configure your own provider key, or use local Ollama.
 
 ## Quick start
 
-CodeShark is intentionally **project-folder-only**. Running `codeshark` uses
-the current directory; `--folder` or `--cwd` selects another directory. It
-refuses to operate on an individual file or a path that does not exist.
+Requires **Node.js 18.17 or later** and npm.
+
+### Install from source
 
 ```bash
-# From a cloned checkout:
+git clone https://github.com/ajashratripathi-crypto/codeshark-cli.git
+cd codeshark-cli
 npm install
 npm run build
 npm install -g .
+```
 
-# Start CodeShark in the project folder:
+Then open the project you want to work on:
+
+```bash
+cd path/to/your-project
 codeshark --folder .
+```
+
+Or send a task directly:
+
+```bash
 codeshark --folder . "explain this project"
-
-# Or select another folder from anywhere:
-codeshark --folder path/to/your-project
-codeshark --cwd path/to/your-project "fix the tests"
-
-# After the package is published:
-npx codeshark-cli       # run from any folder without a global install
-npm install -g codeshark-cli
+codeshark --folder . "find and fix the failing tests"
 ```
 
-Out of the box, CodeShark talks to the community gateway (which routes through
-UnoRouter), so there is **nothing to configure**. If you installed from a
-checkout and `codeshark` is not recognized yet, use `node dist/index.js
---folder .` or run `npm install -g .`. All file edits, searches, and commands
-stay inside the selected project folder.
+Once a release is available on npm, you can install it with `npm install -g codeshark-cli`, or run it with `npx codeshark-cli --folder .`.
 
-By using CodeShark you agree to the [Terms of Service](TERMS.md). See the
-[Privacy Notice](PRIVACY.md) for gateway, provider, local-key, and website
-data handling. The first
-interactive start asks you to accept them once, and `codeshark terms` prints
-them anytime.
+CodeShark works with project folders. Run it from your project directory or choose a folder with `--folder` or `--cwd`. If the command is not recognized after building this repository, use `node dist/index.js --folder .` from the checkout.
 
-### Setup: shared gateway or your own key?
+On first launch, follow the connection setup and accept the [Terms](TERMS.md). The shared gateway lets you start without a personal API key; its free lanes are shared, rate-limited, and subject to availability.
 
-On first launch the CLI asks how you want to connect — and you can re-run it
-anytime with `codeshark setup`:
+## Everyday commands
 
-- **My own API key (recommended)** — typed into the terminal hidden, stored on
-  your computer, and not intentionally printed by CodeShark. Your provider's
-  retention and privacy terms still apply. One UnoRouter key unlocks all 5
-  models.
-- **Shared gateway** — no key on your computer at all; the gateway's keys live
-  as server-side secrets. Shared free lanes are rate-limited, so the gateway
-  **queues** bursts (you wait a moment instead of erroring) and fails over
-  between UnoRouter → OpenRouter → NVIDIA automatically.
-- **Local Ollama** — fully offline on your own machine.
+| Command | What it does |
+| --- | --- |
+| `codeshark --folder .` | Start an interactive session in this folder |
+| `codeshark --folder . "your task"` | Run a one-shot task |
+| `codeshark setup` | Configure your connection and model |
+| `codeshark model` | Show the model catalog |
+| `codeshark keys` | Open the password-protected local key vault |
+| `codeshark banner` | Print the CODESHARK banner |
+| `codeshark update` | Check for and install an npm update |
+| `codeshark terms` | Read the terms |
 
-Your local keys are protected further by the password-locked key vault
-(`codeshark keys`) — scrypt-hashed password, session + CSRF tokens, and key
-values are not intentionally placed in the page HTML or terminal output.
+Inside a conversation:
 
-## Usage
-
-```
-codeshark                              interactive chat for the current folder
-codeshark --folder .                  interactive chat for this folder
-codeshark --folder . "fix the tests"  one-shot prompt for this folder
-codeshark banner                      print the CodeShark wordmark (no folder needed)
-codeshark --folder . setup            providers / keys wizard
-codeshark --folder . model            list the catalog and active model
-codeshark --folder . keys             open the local key vault
-codeshark update                       check for and install the latest release
+```text
+/help       Show available commands
+/plan       Work through a plan
+/build      Switch to building
+/model      See model choices
+/keys       Open the local key vault
+/setup      Reconfigure your connection
+/clear      Clear the conversation
+/quit       End the session
 ```
 
-REPL commands: `/help` `/model` `/keys` `/key-status` `/setup` `/plan` `/build` `/clear` `/quit`
-(Ctrl+C also quits). Read the terms anytime with `codeshark terms`. The `/keys` page listens only on `127.0.0.1`, requires a
-local password, and keeps key values hidden in password-style fields; the
-terminal status command only shows masked values.
+For example, `/model deepseek-v4-flash` switches to DeepSeek-V4 Flash. Your selection is saved locally.
 
-Every tool action asks for `y/n` approval before it runs. Shell commands also
-keep the dangerous-command blocklist. CodeShark checks npm for updates when an
-interactive session starts and asks before installing one; set
-`CODESHARK_NO_UPDATE=1` to skip that check for a launch.
+## Models
 
-To release an update, bump the version with `npm version patch`, run
-`npm test`, and publish with `npm publish --access public`. Users can update
-manually with `codeshark update` or `npm install -g codeshark-cli@latest`.
+The catalog is checked at startup, and unavailable models are marked. These context windows describe the configured catalog; availability depends on the connection and provider.
 
-Review [TERMS.md](TERMS.md) and [PRIVACY.md](PRIVACY.md) before deploying the
-shared gateway for other people. They are not a substitute for legal advice.
+| Model | Context | Selection command |
+| --- | --- | --- |
+| Chat-GPT 5.6 Sol | 400K | `/model gpt-5.6-sol` |
+| DeepSeek-V4 Flash | 256K | `/model deepseek-v4-flash` |
+| MiniMax M3 | 128K | `/model minimax-m3` |
+| **GLM 5.3 Flash Think Search — default** | **1M** | `/model glm-5.3-flash-think-search` |
+| Gemini 3.6 Flash | 1M | `/model gemini-3.6-flash` |
+| Sarvam 30B | 128K | `/model sarvam-30b` |
+| GPT-OSS 120B | 128K | `/model gpt-oss-120b` |
+| Nemotron 3 Ultra 550B A55B | 256K | `/model nemotron-3-ultra-550b-a55b` |
 
-## Tools the agent can use
+## Connection and privacy
 
-- `read_file` / `write_file` / `edit_file` (strict: `oldString` must match **exactly once** or the edit is rejected)
-- `list_directory` / `glob` (`**`, `*`, `?`, `{a,b}`)
-- `code_search` (ripgrep when installed, dependency-free fallback otherwise)
-- `run_command` (bash / cmd, 30s timeout, output capped) — with a built-in
-  danger blocklist: `rm -rf`, `git push`, `sudo`, `curl | sh`, … are refused
-  unless you set `CODESHARK_ALLOW_DANGEROUS=1`
-- `finish` — the model signals completion with a summary
+Run `codeshark setup` to choose the shared gateway, your own API connection, or local Ollama. Provider keys are stored on your computer and are typed hidden during setup. `codeshark keys` opens a password-protected local page for managing them.
 
-## Providers & models
+When you use hosted models, prompts and relevant project content are sent through your configured connection. A personal key does not make hosted processing local; the provider’s privacy and retention policies still apply. See the [Privacy Notice](PRIVACY.md) and [Terms](TERMS.md).
 
-Everything runs through **UnoRouter** (`https://api.unorouter.com/v1`), one
-OpenAI-compatible endpoint that routes to 45+ upstream providers — all five
-catalog models are served on its `:free` lanes. Switch anytime with
-`/model <name>` in the REPL (or `codeshark model <name>`).
+Configuration is stored in `~/.codeshark.json`. Environment options include `CODESHARK_MODEL`, `CODESHARK_GATEWAY_URL`, `CODESHARK_GATEWAY_KEY`, `CODESHARK_NO_COLOR`, `CODESHARK_NO_BANNER`, and `CODESHARK_NO_UPDATE`.
 
-| Model | API identifier | Context | |
-| --- | --- | --- | --- |
-| Chat-GPT 5.6 Sol | `gpt-5.6-sol:free` | 400K | |
-| DeepSeek-V4 Flash | `deepseek-v4-flash-0731:free` | 256K | |
-| GLM 5.3 Flash Thinking | `glm-5.3-flash-thinking:free` | 1M | default |
-| Kimi-K3 | `kimi-k3:free` | 256K | |
-| Gemini 3.6 Flash | `gemini-3.6-flash:free` | 1M | |
+## Publish the website with GitHub Pages
 
-\* All models run through the zero-setup gateway without any key — nothing to
-configure.
+The website is plain HTML, CSS, and JavaScript. GitHub Pages hosts the website; it does **not** run the terminal agent or the model gateway.
 
-**Keys:**
-- UnoRouter → https://unorouter.com/en/tokens (one key, 200+ models — the only key you really need)
-- Google AI Studio → https://aistudio.google.com/apikey (`AIza…`)
+This repository includes a deployment workflow at [`.github/workflows/pages.yml`](.github/workflows/pages.yml). It publishes only the website assets and linked policy files.
 
-Run `codeshark setup` to paste a key and pick a default model — it tests the key
-live before saving.
+### One-time setup
 
-**Rate limits:** shared lanes throttle (~20 req/min, ~200/day). If you hit
-a 429, the agent tells you — wait a moment or switch models with `/model`.
+1. Commit and push the website files and workflow to the `main` branch of [`ajashratripathi-crypto/codeshark-cli`](https://github.com/ajashratripathi-crypto/codeshark-cli).
+2. Open the repository’s **Settings → Pages**.
+3. Under **Build and deployment → Source**, select **GitHub Actions**.
+4. Open **Actions → Deploy CodeShark website → Run workflow**, select `main`, and run it. Later pushes to `main` trigger deployment automatically.
+5. When the deployment succeeds, open the URL shown in the workflow’s `github-pages` environment.
 
-## Configuration
+Without a custom domain, the expected address is:
 
-`~/.codeshark.json` (env vars override):
+**https://ajashratripathi-crypto.github.io/codeshark-cli/**
 
-```json
-{
-  "provider": "unorouter",
-  "model": "unorouter/glm-5.3-flash-thinking",
-  "unorouterApiKey": "ur-…",
-  "openrouterApiKey": "sk-…",
-  "nvidiaApiKey": "nvapi-…",
-  "geminiApiKey": "AIza…",
-  "gatewayUrl": "https://your-gateway.workers.dev",
-  "ollamaBaseUrl": "http://127.0.0.1:11434/v1",
-  "ollamaModel": "qwen3-coder:30b",
-  "maxIterations": 25
-}
+That address becomes live only after Pages is enabled and deployment succeeds. A repository named `ajashratripathi-crypto.github.io` would instead publish at the account’s root address.
+
+The workflow keeps `index.html` at the published site root and includes `site.css`, `site.js`, `public/og.png`, `PRIVACY.md`, and `TERMS.md`. Relative asset paths let the page work under `/codeshark-cli/`.
+
+If you use a custom domain, update the canonical URL and social image URLs in `index.html` to match it.
+
+### Does it update automatically?
+
+**Local edits do not automatically update GitHub.** A connected Git remote identifies where commits can be pushed; it does not upload every file as you save it.
+
+The update flow is:
+
+```text
+Edit locally → review changes → commit → push to main
+                                      ↓
+                          GitHub README updates
+                          Pages workflow publishes the site
 ```
 
-Env vars: `CODESHARK_MODEL`, `UNOROUTER_API_KEY`, `OPENROUTER_API_KEY`,
-`GEMINI_API_KEY`, `CODESHARK_GATEWAY_URL`, `CODESHARK_GATEWAY_KEY`,
-`CODESHARK_NO_COLOR`, `CODESHARK_NO_BANNER`, `CODESHARK_NO_LOADING`,
-`CODESHARK_ALLOW_DANGEROUS`.
+You can commit and push with your editor’s Source Control panel, GitHub Desktop, or Git. Review the selected files before committing. Website deployment and npm releases are separate: a push does not publish a new CLI package to npm.
 
-## Run your own community gateway
-
-Anyone can fork the repo and deploy their own gateway — the URL is configurable,
-so your users hit *your* gateway:
-
-```bash
-cd worker
-npx wrangler secret put UNOROUTER_API_KEY    # your UnoRouter key (primary), stays server-side
-npx wrangler secret put OPENROUTER_API_KEY   # optional: OpenRouter fallback key
-npx wrangler secret put NVIDIA_API_KEY       # optional: NVIDIA NIM fallback key (nvapi-…)
-npx wrangler deploy
-```
-
-Then point CodeShark at it:
-
-```bash
-codeshark setup   # or edit ~/.codeshark.json: "gatewayUrl": "https://<you>.workers.dev"
-```
-
-The gateway serves only `:free` model identifiers — it never routes anything
-paid — rate-limits per IP, adds CORS, and refuses any non-`:free` identifier.
-When a provider rate-limits (429), the gateway **waits and retries**, then
-hands off to the next configured provider (UnoRouter → OpenRouter → NVIDIA),
-and per-IP bursts **queue** (wait for a slot) instead of failing. Your keys are
-Worker secrets: never logged, never returned, never visible to users. Clients
-also retry 429s with backoff, so shared lanes feel smooth.
-
-## Architecture
-
-```
-┌────────────┐   messages/tools   ┌──────────────────┐   OpenAI-compatible   ┌──────────────┐
-│  terminal  │ ─────────────────▶ │   agent loop      │ ───────────────────▶ │  provider    │
-│ (repl/cli) │ ◀───────────────── │ (tools, guard)    │ ◀─────────────────── │  chain       │
-└────────────┘   streamed text    └──────────────────┘   SSE stream          └──────┬───────┘
-                                                                                    │
-                                  gateway (Cloudflare Worker, :free only) ◀─────────┤
-                                  unorouter (:free, your key) ◀────────────────────┤
-                                  gemini ◀──────────────────────────────────────────┤
-                                  ollama (local) ◀──────────────────────────────────┘
-```
-
-- `src/provider/` — canonical `ChatClient` interface + adapters (OpenAI-compatible
-  shared core, UnoRouter, OpenRouter, NVIDIA NIM, Gemini conversion, Ollama)
-- `src/agent.ts` — the loop: model → tool calls → results → repeat (25-iteration guard)
-- `src/tools/` — file, search, and shell tools (zero dependencies)
-- `src/banner.ts` — the CodeShark wordmark and startup banner
-- `worker/` — the Cloudflare Worker gateway
-
-## Share it with other computers
-
-Other people run your CodeShark the exact same way you do — through npm.
-Publish once, and anyone with Node.js 18+ can run it from any computer.
-
-The package name is `codeshark-cli` (npm's anti-squatting rules reserve the
-bare `codeshark` name, which is too similar to the existing `code-shark`
-package). The command you type stays `codeshark`:
-
-```bash
-npm login                     # once per computer (create an npm account first)
-npm run typecheck && npm test
-npm pack --dry-run            # preview exactly what ships: dist/, README, LICENSE
-npm publish --access public   # publish version 0.1.0
-```
-
-Bump the version for every release: `npm version patch` (or `minor`/`major`),
-then `npm publish` again.
-
-From that moment, on **any computer** with Node.js 18+:
-
-```bash
-npx codeshark-cli --folder .  # run instantly — no install needed
-npm install -g codeshark-cli  # or install it like a real CLI
-codeshark --folder .          # then use it anywhere
-```
-
-The person on the other computer needs no API key and no account — the model
-provider stays server-side, so it works out of the box. The agent only works
-inside the folder they open with `--folder`; it edits, searches, and runs
-commands there and nowhere else.
-
-Not ready to publish? `npm pack` produces a single `codeshark-<version>.tgz`
-file — send that one file and the receiver runs `npm install -g
-./codeshark-0.1.0.tgz`.
+For GitHub’s setup instructions, see [Configuring a publishing source](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site).
 
 ## Development
 
 ```bash
 npm install
-npm run typecheck     # tsc --noEmit
-npm test              # build + node:test (agent loop, tools, parsers, banner)
-npm run worker:build  # typecheck the gateway worker
+npm run typecheck
+npm test
+npm run worker:build
 ```
 
-## Roadmap
+The website needs no framework build. Edit `index.html`, `site.css`, and `site.js`; the Pages workflow copies them directly into the deployment artifact.
 
-- [x] Wordmark banner, REPL, one-shot mode, setup wizard
-- [x] UnoRouter provider: 5 frontier models, one key
-- [x] Agent loop with streaming + tool calling (UnoRouter/Gemini/Ollama/gateway)
-- [x] File, search, and shell tools with safety blocklist
-- [x] Cloudflare Worker gateway (`:free`-only, UnoRouter-routed)
-- [ ] Session memory / project context
-- [x] npm package metadata and `npx codeshark-cli`/global-install support (publish manually)
-- [ ] Approval prompts for sensitive commands
-- [ ] More providers (Groq, Cerebras, …)
+| Location | Purpose |
+| --- | --- |
+| `src/agent.ts` | Model and tool execution loop |
+| `src/tools/` | File, search, and shell tools |
+| `src/provider/` | Provider adapters |
+| `src/banner.ts` | Responsive terminal wordmark |
+| `worker/` | Community gateway |
+| `index.html`, `site.css`, `site.js` | Public website |
+| `.github/workflows/pages.yml` | GitHub Pages deployment |
+
+To release the CLI, run the checks, review `npm pack --dry-run`, bump the package version, and publish with `npm publish --access public`. Publishing requires an npm account with permission to release `codeshark-cli`.
+
+## Contributing
+
+Issues and pull requests are welcome at [ajashratripathi-crypto/codeshark-cli](https://github.com/ajashratripathi-crypto/codeshark-cli). Include a clear description, reproduction steps where relevant, and validation for code changes.
 
 ## License
 
-MIT.
+CodeShark is [MIT licensed](LICENSE).
+
+## Provider details and self-hosting
+
+CodeShark’s current free catalog uses UnoRouter through an OpenAI-compatible connection. You can configure your own key during setup. Additional adapters support OpenRouter, NVIDIA NIM, Gemini, and Ollama; their available models and limits depend on your configuration.
+
+For self-hosting, the gateway lives in `worker/` and runs as a Cloudflare Worker. Configure its secrets in your own account:
+
+```bash
+cd worker
+npx wrangler secret put UNOROUTER_API_KEY
+npx wrangler secret put OPENROUTER_API_KEY
+npx wrangler secret put NVIDIA_API_KEY
+npx wrangler deploy
+```
+
+The OpenRouter and NVIDIA keys are optional fallback credentials. Set `gatewayUrl` in your local configuration to your deployed Worker URL. Keep provider credentials in Worker secrets, never in the website or repository.
+
+The gateway accepts supported free-lane identifiers and applies rate limits, queuing, and configured failover. This backend is deployed separately from GitHub Pages. Consult `worker/` and the policy documents before operating a shared gateway.
