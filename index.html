@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CodeShark — Ship from your terminal</title>
+  <meta name="description" content="CodeShark is a free, open-source coding agent for your terminal. Open a folder, describe the work, and ship.">
+  <meta name="theme-color" content="#09090b">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%233b82f6' d='M9 34c9-18 29-25 45-18-6 3-10 7-12 12 6 1 11 4 14 8-9 1-17 1-24-1-6 5-13 7-23 6l8-7-8 0z'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Premium Dark Theme Palette */
+      --bg: #09090b;
+      --bg-surface: #121214;
+      --bg-card: rgba(24, 24, 27, 0.6);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(255, 255, 255, 0.15);
+      
+      --text-main: #f8fafc;
+      --text-muted: #a1a1aa;
+      --text-dim: #71717a;
+      
+      --accent-blue: #3b82f6;
+      --accent-cyan: #06b6d4;
+      --accent-green: #10b981;
+      
+      --glow-blue: rgba(59, 130, 246, 0.5);
+      --glow-cyan: rgba(6, 182, 212, 0.5);
+
+      --font-display: 'Space Grotesk', system-ui, sans-serif;
+      --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', Consolas, monospace;
+      
+      --max-w: 1100px;
+      --radius-sm: 8px;
+      --radius-md: 16px;
+      --radius-lg: 24px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; background: var(--bg); }
+    
+    body {
+      color: var(--text-main);
+      font-family: var(--font-body);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Premium Background FX */
+    body::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 100vh;
+      background: radial-gradient(circle at 50% -20%, rgba(59, 130, 246, 0.15), transparent 60%);
+      z-index: -2;
+      pointer-events: none;
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse at center 0%, black 0%, transparent 70%);
+      -webkit-mask-image: radial-gradient(ellipse at center 0%, black 0%, transparent 70%);
+      opacity: 0.3;
+    }
+
+    ::selection { background: var(--glow-blue); color: #fff; }
+    a { color: inherit; text-decoration: none; transition: color 0.2s; }
+    button { border: none; background: none; font: inherit; cursor: pointer; }
+    
+    .wrap { width: min(var(--max-w), 100% - 48px); margin: 0 auto; }
+    .mono { font-family: var(--font-mono); }
+    
+    .gradient-text {
+      background: linear-gradient(135deg, #60a5fa, #22d3ee);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      height: 44px;
+      padding: 0 20px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-body);
+      font-weight: 500;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+    .btn-primary {
+      background: var(--text-main);
+      color: var(--bg);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.1), 0 4px 14px rgba(255,255,255,0.15);
+    }
+    .btn-primary:hover {
+      background: #e2e8f0;
+      transform: translateY(-1px);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.2), 0 6px 20px rgba(255,255,255,0.2);
+    }
+    .btn-secondary {
+      background: var(--bg-surface);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      background: var(--bg-card);
+      border-color: var(--border-hover);
+    }
+    .btn svg { width: 16px; height: 16px; }
+
+    /* Navigation */
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(9, 9, 11, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner { height: 64px; display: flex; align-items: center; justify-content: space-between; }
+    .nav-brand { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; font-size: 18px; letter-spacing: -0.02em; }
+    .nav-brand svg { width: 24px; height: 24px; }
+    .nav-brand span { color: var(--text-main); }
+    .nav-links { display: flex; gap: 32px; font-size: 14px; font-weight: 500; color: var(--text-muted); }
+    .nav-links a:hover { color: var(--text-main); }
+    .nav-actions { display: flex; align-items: center; gap: 16px; }
+    .nav-github { font-size: 14px; color: var(--text-muted); font-weight: 500; }
+    .nav-github:hover { color: var(--text-main); }
+
+    /* Hero Section */
+    .hero { padding: 100px 0 60px; text-align: center; }
+    
+    /* NEW: Clean Typographic Logo */
+    .hero-logo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 28px;
+      user-select: none;
+      animation: logo-in 0.9s cubic-bezier(.2,.8,.2,1) both;
+    }
+    .hero-logo-text {
+      font-family: var(--font-display);
+      font-size: clamp(48px, 10vw, 110px);
+      font-weight: 700;
+      letter-spacing: -0.05em;
+      line-height: 1;
+      text-shadow: 0 0 40px rgba(59, 130, 246, 0.12);
+    }
+    .hero-logo-text span:first-child { color: var(--text-main); }
+    .hero-logo-text span:last-child {
+      background: linear-gradient(to right, #3b82f6, #06b6d4);
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+    .hero h1 {
+      font-family: var(--font-display);
+      font-size: clamp(36px, 5vw, 64px);
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      line-height: 1.1;
+      max-width: 800px;
+      margin: 0 auto 22px;
+    }
+    .hero p {
+      font-size: 18px;
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto 40px;
+    }
+    .hero-actions { display: flex; justify-content: center; gap: 16px; margin-bottom: 64px; }
+
+    /* Terminal Demo */
+    .terminal-wrapper {
+      max-width: 900px;
+      margin: 0 auto;
+      border-radius: var(--radius-md);
+      background: #000;
+      border: 1px solid var(--border);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.05) inset;
+      overflow: hidden;
+      text-align: left;
+      position: relative;
+      animation: terminal-float 7s ease-in-out 1.1s infinite;
+    }
+    .terminal-wrapper::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(110deg, transparent 35%, rgba(34, 211, 238, 0.08) 50%, transparent 65%);
+      transform: translateX(-120%);
+      animation: terminal-scan 6s ease-in-out 2s infinite;
+    }
+    .term-header {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      background: #111;
+      border-bottom: 1px solid #222;
+    }
+    .term-dots { display: flex; gap: 8px; }
+    .term-dots i { width: 10px; height: 10px; border-radius: 50%; background: #444; }
+    .term-dots i:nth-child(1) { background: #ff5f56; }
+    .term-dots i:nth-child(2) { background: #ffbd2e; }
+    .term-dots i:nth-child(3) { background: #27c93f; }
+    .term-title { flex: 1; text-align: center; font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); margin-right: 42px; }
+    
+    .term-body {
+      padding: 24px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.8;
+      color: #e2e8f0;
+      min-height: 340px;
+    }
+    .term-brand {
+      display: block;
+      width: fit-content;
+      max-width: 100%;
+      margin: 0 0 14px;
+      font-family: var(--font-display);
+      font-size: clamp(36px, 7vw, 76px);
+      font-weight: 700;
+      line-height: .9;
+      letter-spacing: -.06em;
+      color: #f8fafc;
+      white-space: nowrap;
+    }
+    .term-brand .shark {
+      background: linear-gradient(90deg, #0b2a5b, #1677c8 52%, #9bdcff);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .term-meta { color: #8ba3ba; line-height: 1.45; margin-bottom: 4px; }
+    .term-status { color: var(--accent-green); margin-bottom: 22px; }
+    .t-line { display: flex; gap: 12px; }
+    .t-prompt { color: var(--accent-cyan); user-select: none; }
+    .t-cmd { color: #fff; }
+    .t-gray { color: #64748b; }
+    .t-green { color: var(--accent-green); }
+    .t-blue { color: #60a5fa; }
+    
+    .t-agent-block {
+      margin: 16px 0 16px 12px;
+      padding-left: 16px;
+      border-left: 2px solid rgba(6, 182, 212, 0.3);
+      background: rgba(6, 182, 212, 0.02);
+      border-radius: 0 4px 4px 0;
+      padding-top: 8px; padding-bottom: 8px;
+    }
+    .t-cursor {
+      display: inline-block;
+      width: 8px; height: 16px;
+      background: var(--text-main);
+      vertical-align: middle;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+    @keyframes logo-in { from { opacity: 0; transform: translateY(18px) scale(.96); } to { opacity: 1; transform: none; } }
+    @keyframes terminal-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+    @keyframes terminal-scan { 0%, 35% { transform: translateX(-120%); } 65%, 100% { transform: translateX(120%); } }
+
+    /* Sections Shared */
+    .section { padding: 120px 0; }
+    .sec-head { text-align: center; max-width: 600px; margin: 0 auto 64px; }
+    .sec-head h2 { font-family: var(--font-display); font-size: clamp(32px, 4vw, 48px); font-weight: 700; letter-spacing: -0.03em; margin-bottom: 16px; }
+    .sec-head p { color: var(--text-muted); font-size: 16px; }
+
+    /* Features */
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+    .card {
+      padding: 32px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      transition: border-color 0.3s, transform 0.3s, background 0.3s, box-shadow 0.3s;
+    }
+    .card:hover { border-color: rgba(34, 211, 238, 0.35); transform: translateY(-8px); background: rgba(24, 24, 27, 0.82); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24); }
+    .card-icon {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--accent-blue);
+      margin-bottom: 24px;
+    }
+    .card h3 { font-family: var(--font-display); font-size: 20px; font-weight: 600; margin-bottom: 12px; }
+    .card p { color: var(--text-muted); font-size: 15px; line-height: 1.6; }
+
+    /* Models Table */
+    .model-list {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-surface);
+      overflow: hidden;
+    }
+    .model-row {
+      display: grid;
+      grid-template-columns: 48px 250px 100px 1fr;
+      align-items: center;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      gap: 16px;
+      transition: background 0.25s, padding-left 0.25s;
+    }
+    .model-row:hover { background: rgba(255, 255, 255, 0.025); padding-left: 30px; }
+    .model-row:last-child { border-bottom: none; }
+    .m-num { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); }
+    .m-name { font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+    .m-badge { 
+      font-size: 10px; padding: 2px 6px; border-radius: 4px; font-family: var(--font-mono);
+      background: rgba(16, 185, 129, 0.1); color: var(--accent-green); border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+    .m-ctx { font-family: var(--font-mono); font-size: 12px; color: var(--accent-cyan); }
+    .m-desc { color: var(--text-muted); font-size: 14px; }
+
+    /* Install Section - UPDATED TO 2 STEPS */
+    .install-box {
+      max-width: 800px;
+      margin: 0 auto;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 48px;
+      position: relative;
+      overflow: hidden;
+    }
+    .install-box::before {
+      content: ""; position: absolute; top: -100px; right: -100px; width: 300px; height: 300px;
+      background: var(--glow-blue); filter: blur(100px); opacity: 0.2; z-index: 0;
+    }
+    .install-content { position: relative; z-index: 1; }
+    .install-content h2 { font-family: var(--font-display); font-size: 32px; font-weight: 700; margin-bottom: 8px; }
+    .install-content > p { color: var(--text-muted); margin-bottom: 40px; }
+    
+    .steps-container {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .step-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 10px;
+    }
+    .cmd-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #000;
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 12px 16px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: 14px;
+    }
+    .cmd-text span { color: var(--accent-green); margin-right: 12px; user-select: none; }
+    .cmd-copy {
+      padding: 6px 12px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.05);
+      color: var(--text-muted);
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    .cmd-copy:hover { background: rgba(255,255,255,0.1); color: var(--text-main); }
+    .cmd-copy.copied { color: var(--accent-green); background: rgba(16, 185, 129, 0.1); }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 48px 0;
+      background: #050505;
+    }
+    .ft-inner { display: flex; justify-content: space-between; align-items: center; }
+    .ft-brand { font-family: var(--font-display); font-weight: 700; color: var(--text-muted); }
+    .ft-links { display: flex; gap: 24px; font-size: 14px; color: var(--text-dim); }
+    .ft-links a:hover { color: var(--text-main); }
+
+    /* Responsive */
+    @media (max-width: 800px) {
+      .nav-links { display: none; }
+      .hero { padding: 60px 0 40px; }
+      .hero-logo-text { font-size: 42px; }
+      .term-body { padding: 16px; font-size: 12px; min-height: 250px; }
+      .model-row { grid-template-columns: 1fr; gap: 8px; padding: 16px; }
+      .m-num, .m-ctx { display: inline; margin-right: 8px; }
+      .install-box { padding: 32px 24px; }
+      .cmd-bar { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .cmd-copy { align-self: flex-end; }
+      .ft-inner { flex-direction: column; gap: 24px; text-align: center; }
+    }
+    
+    /* Animations */
+    .fade-up { opacity: 0; transform: translateY(20px); transition: opacity 0.8s ease-out, transform 0.8s ease-out; }
+    .fade-up.visible { opacity: 1; transform: none; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a href="#" class="nav-brand">
+        <svg viewBox="0 0 64 64" fill="none">
+          <path fill="#3b82f6" d="M9 34c9-18 29-25 45-18-6 3-10 7-12 12 6 1 11 4 14 8-9 1-17 1-24-1-6 5-13 7-23 6l8-7-8 0z"/>
+          <path fill="#22d3ee" d="M46 22c3-2 6-4 10-5-3 3-4 5-5 8z" opacity=".9"/>
+        </svg>
+        <span>CodeShark</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#models">Models</a>
+        <a href="#install">Install</a>
+      </nav>
+      <div class="nav-actions">
+        <a href="https://npmjs.com/package/codeshark-cli" target="_blank" class="nav-github">npm ↗</a>
+        <a href="#install" class="btn btn-primary">Get Started</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero wrap">
+    <div class="hero-logo fade-up" style="transition-delay: 0.1s">
+      <div class="hero-logo-text">
+        <span>CODE</span><span>SHARK</span>
+      </div>
+    </div>
+
+    <h1 class="fade-up" style="transition-delay: 0.2s">Ship directly from your <br><span class="gradient-text">command line.</span></h1>
+    <p class="fade-up" style="transition-delay: 0.3s">A focused, open-source AI coding agent. Open a folder, describe the task, and watch it reason through your code without ever leaving the terminal.</p>
+    
+    <div class="hero-actions fade-up" style="transition-delay: 0.4s">
+      <a href="#install" class="btn btn-primary">
+        Install CLI
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+      </a>
+      <a href="#models" class="btn btn-secondary">View Models</a>
+    </div>
+
+    <!-- Terminal Demo -->
+    <div class="terminal-wrapper fade-up" style="transition-delay: 0.5s">
+      <div class="term-header">
+        <div class="term-dots"><i></i><i></i><i></i></div>
+        <div class="term-title">codeshark — ~/projects/api</div>
+      </div>
+      <div class="term-body" id="term-demo">
+        <div class="t-line"><span class="t-prompt">$</span><span class="t-cmd">codeshark --folder .</span></div>
+        <div class="term-brand" aria-label="CodeShark"><span>CODE</span><span class="shark">SHARK</span></div>
+        <div class="term-meta">Chat-GPT 5.6 Sol · 400K context<br>C:\Users\you\project</div>
+        <div class="term-status">✓ Starting the agent</div>
+        <div class="t-line t-gray">Type a message and press Enter. /help for commands · Ctrl+C to quit.</div>
+        <div class="t-line"><span class="t-prompt">&gt;</span><span class="t-cursor"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section id="features" class="section wrap">
+    <div class="sec-head fade-up">
+      <h2>Less context switching.</h2>
+      <p>CodeShark stays close to your code. No dashboards, no copy-pasting back and forth. Just an agent in the folder where the work lives.</p>
+    </div>
+    <div class="grid-3">
+      <div class="card fade-up">
+        <div class="card-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+        </div>
+        <h3>Native to Terminal</h3>
+        <p>Keep your editor, shell, and Git workflow in one place. Ask for a change without breaking your rhythm.</p>
+      </div>
+      <div class="card fade-up" style="transition-delay: 0.1s">
+        <div class="card-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+        </div>
+        <h3>Folder Scoped</h3>
+        <p>By passing the `--folder .` flag, the agent is strictly bound to your current workspace, ensuring safe reads and edits.</p>
+      </div>
+      <div class="card fade-up" style="transition-delay: 0.2s">
+        <div class="card-icon">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+        </div>
+        <h3>Built for Changes</h3>
+        <p>It doesn't just chat. It searches references, edits files directly, and can run your test suites to verify its work.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Models -->
+  <section id="models" class="section wrap">
+    <div class="sec-head fade-up">
+      <h2>Switch your thinking style.</h2>
+      <p>Different tasks require different models. Switch instantly via command line flags or live chat commands.</p>
+    </div>
+    <div class="model-list fade-up">
+      <div class="model-row">
+        <div class="m-num">01</div>
+        <div class="m-name">Chat-GPT 5.6 Sol</div>
+        <div class="m-ctx">400K</div>
+        <div class="m-desc">Frontier reasoning for complex, multi-file architecture changes.</div>
+      </div>
+      <div class="model-row">
+        <div class="m-num">02</div>
+        <div class="m-name">DeepSeek-V4 Flash</div>
+        <div class="m-ctx">256K</div>
+        <div class="m-desc">Extremely fast, direct, and writes exceptionally strong code.</div>
+      </div>
+      <div class="model-row">
+        <div class="m-num">03</div>
+        <div class="m-name">Kimi-K3</div>
+        <div class="m-ctx">256K</div>
+        <div class="m-desc">Strong long-context coding support for focused, multi-file changes.</div>
+      </div>
+      <div class="model-row">
+        <div class="m-num">04</div>
+        <div class="m-name">GLM 5.3 Flash <span class="m-badge">DEFAULT</span></div>
+        <div class="m-ctx">1M</div>
+        <div class="m-desc">Deliberate reasoning with massive context window out of the box.</div>
+      </div>
+      <div class="model-row">
+        <div class="m-num">05</div>
+        <div class="m-name">Gemini 3.6 Flash</div>
+        <div class="m-ctx">1M</div>
+        <div class="m-desc">Incredibly fast ingestion for gigantic project surfaces.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Install (Updated with the specific requirement) -->
+  <section id="install" class="section wrap">
+    <div class="install-box fade-up">
+      <div class="install-content">
+        <h2>Start shipping today.</h2>
+        <p>CodeShark requires Node.js 18+ and works instantly on macOS, Windows, and Linux.</p>
+        
+        <div class="steps-container">
+          <!-- Step 1 -->
+          <div>
+            <div class="step-label">1. Install the CLI globally</div>
+            <div class="cmd-bar">
+              <div class="cmd-text"><span>$</span>npm install -g codeshark-cli</div>
+              <button class="cmd-copy" data-copy="npm install -g codeshark-cli">Copy</button>
+            </div>
+          </div>
+          
+          <!-- Step 2 (The specific request) -->
+          <div>
+            <div class="step-label">2. Run in your project folder</div>
+            <div class="cmd-bar">
+              <div class="cmd-text"><span>$</span>codeshark</div>
+              <button class="cmd-copy" data-copy="codeshark">Copy</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="wrap ft-inner">
+      <div class="ft-brand">CodeShark © 2026</div>
+      <div class="ft-links">
+        <a href="https://npmjs.com/package/codeshark-cli">npm package</a>
+        <a href="PRIVACY.md">Privacy</a>
+        <a href="TERMS.md">Terms</a>
+        <a href="#">GitHub</a>
+        <span>MIT License</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Copy to clipboard functionality
+    document.querySelectorAll('[data-copy]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const text = btn.getAttribute('data-copy');
+        navigator.clipboard.writeText(text).then(() => {
+          const originalText = btn.innerText;
+          btn.innerText = 'Copied!';
+          btn.classList.add('copied');
+          setTimeout(() => {
+            btn.innerText = originalText;
+            btn.classList.remove('copied');
+          }, 2000);
+        });
+      });
+    });
+
+    // Intersection Observer for scroll animations
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+  </script>
+</body>
+</html>
