@@ -1,6 +1,10 @@
 ﻿# CODESHARK
 
-An open-source coding agent that reads your project, plans the work, edits files, and runs commands—with your approval. Eight model choices, one familiar terminal.
+[![CI](https://github.com/ajashratripathi-crypto/codeshark-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/ajashratripathi-crypto/codeshark-cli/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/codeshark-cli)](https://www.npmjs.com/package/codeshark-cli)
+[![license](https://img.shields.io/npm/l/codeshark-cli)](LICENSE)
+
+An open-source coding agent that reads your project, plans the work, edits files, and runs commands—with your approval. Four model choices, one familiar terminal.
 
 [Source code](https://github.com/ajashratripathi-crypto/codeshark-cli) | [Quick start](#quick-start) | [Models](#models) | [License](LICENSE)
 
@@ -96,6 +100,18 @@ Run `codeshark setup` to choose the shared gateway, your own API connection, or 
 When you use hosted models, prompts and relevant project content are sent through your configured connection. A personal key does not make hosted processing local; the provider’s privacy and retention policies still apply. See the [Privacy Notice](PRIVACY.md) and [Terms](TERMS.md).
 
 Configuration is stored in `~/.codeshark.json`. Environment options include `CODESHARK_MODEL`, `CODESHARK_GATEWAY_URL`, `CODESHARK_GATEWAY_KEY`, `CODESHARK_NO_COLOR`, `CODESHARK_NO_BANNER`, and `CODESHARK_NO_UPDATE`.
+
+## Releasing
+
+Publishing is automated: pushing a version tag runs the tests, publishes to npm, and cuts a GitHub Release with notes.
+
+```bash
+# bump "version" in package.json first, then:
+git tag v0.1.8
+git push origin v0.1.8
+```
+
+One-time setup: add an npm Granular Access Token (packages: read-write on `codeshark-cli`, two-factor: bypass) as the `NPM_TOKEN` repository secret.
 
 ## Update
 

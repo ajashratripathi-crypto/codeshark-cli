@@ -1,0 +1,51 @@
+# Publishes codeshark-cli to npm and cuts a GitHub Release when a tag is pushed.
+#
+# One-time setup:
+#   1. npmjs.com → Access Tokens → Generate New Token → Granular Access Token
+#      - Packages: read-write on codeshark-cli
+#      - Two-factor authentication: "Bypass two-factor authentication"
+#   2. GitHub repo → Settings → Secrets and variables → Actions → New secret:
+#      NPM_TOKEN = <the token>
+# Then ship a release with:
+#   git tag v0.1.8 && git push origin v0.1.8
+
+name: Publish
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true

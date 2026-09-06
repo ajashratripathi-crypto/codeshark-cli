@@ -1,0 +1,79 @@
+# Probes every catalog model through the community gateway once a day.
+# If a model stays unreachable after repeated retries, opens a GitHub issue
+# (deduped — one open issue per failing batch) so slugs get fixed fast.
+
+name: Model watchdog
+
+on:
+  schedule:
+    - cron: "0 13 * * *" # daily at 13:00 UTC
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe catalog models through the gateway
+        id: probe
+        env:
+          GATEWAY: https://codeshark-gateway.ajrgp.workers.dev
+        run: |
+          node --input-type=module <<'EOF'
+          import { writeFileSync } from "node:fs";
+
+          const models = [
+            "glm-5.3-flash-think-search:free",
+            "gemini-3.6-flash:free",
+            "nemotron-3-ultra-550b-a55b:free",
+            "minimax-m2.7:free",
+          ];
+
+          // Free lanes are congested often: retry 3x with a 90s timeout
+          // before declaring a model dark, and wait between models so we
+          // never trip the gateway's per-IP queue.
+          const dead = [];
+          for (const model of models) {
+            let ok = false;
+            for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+              try {
+                const res = await fetch(`${process.env.GATEWAY}/v1/chat/completions`, {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({
+                    model,
+                    messages: [{ role: "user", content: "Reply with OK." }],
+                    stream: false,
+                    max_tokens: 4,
+                  }),
+                  signal: AbortSignal.timeout(90_000),
+                });
+                ok = res.ok;
+              } catch {
+                ok = false;
+              }
+              if (!ok) await new Promise((r) => setTimeout(r, 5_000));
+            }
+            console.log(`${ok ? "✓" : "✗"} ${model}`);
+            if (!ok) dead.push(model);
+          }
+
+          writeFileSync(process.env.GITHUB_OUTPUT, `dead=${dead.join(",")}\n`, { flag: "a" });
+          EOF
+
+      - name: Open an issue when a model goes dark
+        if: steps.probe.outputs.dead != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEAD: ${{ steps.probe.outputs.dead }}
+        run: |
+          TITLE="Model watchdog: $DEAD unreachable"
+          COUNT=$(gh issue list --search "$TITLE" --state open --json number --jq 'length')
+          if [ "$COUNT" -eq 0 ]; then
+            gh issue create --title "$TITLE" --body \
+              "The daily probe could not reach **$DEAD** through the community gateway (3 attempts each, 90s timeout). The free lane may be congested, or the slug was renamed/retired upstream. Check the gateway at https://codeshark-gateway.ajrgp.workers.dev/ and the UnoRouter/OpenRouter catalogs, then update \`src/models.ts\` and \`OPENROUTER_ALIASES\` in \`worker/src/index.ts\`."
+          else
+            echo "An issue for this failure is already open — not duplicating."
+          fi
