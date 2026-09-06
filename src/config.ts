@@ -72,6 +72,8 @@ export function loadConfig(): CodeSharkConfig {
     for (const key of strings) if (cfg[key] !== undefined && typeof cfg[key] !== "string") delete cfg[key];
     for (const key of ["termsAccepted", "setupCompleted"] as const) if (typeof cfg[key] !== "boolean") delete cfg[key];
     if (cfg.provider && !["gateway", "openrouter", "nvidia", "gemini", "ollama", "unorouter"].includes(cfg.provider)) delete cfg.provider;
+    // Self-heal: drop a saved model that a provider retired so the current default applies.
+    if (cfg.model && isRetiredModel(cfg.model)) delete cfg.model;
     return cfg;
   } catch {
     return {};

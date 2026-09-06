@@ -6,7 +6,7 @@ import { ToolRegistry } from "./tools/index.js";
 import { ChatClient, ChatMessage, ProviderError, StreamEvents, ToolCall, errorMessage } from "./provider/types.js";
 import { runSetup } from "./setup.js";
 import { loadConfig, modelLabel, saveConfig } from "./config.js";
-import { DEFAULT_MODEL_ID, MODELS, RETIRED_MODELS, findModel, isRetiredModel } from "./models.js";
+import { DEFAULT_MODEL_ID, MODELS, findModel } from "./models.js";
 import { resolveClients } from "./provider/index.js";
 import { launchKeysPage } from "./keysPage.js";
 import { defaultSystemPrompt, type AgentMode } from "./system.js";
@@ -69,13 +69,6 @@ export function printModelInfo(): void {
     const marker = status === "available" ? hex("#4ade80", "●") : status === "unavailable" ? hex("#f87171", "✗") : dim("○");
     const note = status === "unavailable" ? `Unavailable${modelAvailabilityReason(m.id) ? ` — ${modelAvailabilityReason(m.id)}` : ""}` : m.notes;
     console.log(`    ${marker} ${m.label.padEnd(28)} ${dim(m.context.padEnd(5))} ${status === "unavailable" ? hex("#f87171", note) : note}`);
-  }
-  for (const m of RETIRED_MODELS) {
-    console.log(`    ${hex("#f87171", "✗")} ${m.label.padEnd(28)} ${dim(m.context.padEnd(5))} ${hex("#f87171", "Unavailable — removed by provider")}`);
-  }
-  const cfgModel = loadConfig().model;
-  if (cfgModel && isRetiredModel(cfgModel)) {
-    console.log(hex("#f87171", `  ✗ Saved model "${cfgModel}" is unavailable. Using ${findModel(DEFAULT_MODEL_ID)?.label ?? DEFAULT_MODEL_ID}.`));
   }
   console.log("");
   console.log(dim("  Switch with: /model <name>"));
