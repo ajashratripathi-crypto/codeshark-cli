@@ -1776,3 +1776,19 @@ footer nav {
     visibility:visible
   }
 }
+
+/* ── Cost comparison ─────────────────────────────────────────────────── */
+.pricing-panel{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:26px 26px 16px;max-width:860px}
+.price-row{display:grid;grid-template-columns:190px 1fr;gap:14px;align-items:center;padding:13px 0}
+.price-name{display:flex;align-items:center;gap:11px;font:600 14px var(--body);color:var(--text);white-space:nowrap}
+.price-monogram{display:grid;place-items:center;width:30px;height:30px;border-radius:8px;border:1px solid #2c3b51;background:var(--surface2);font:700 13px var(--display);color:#d4e0f1;flex:none}
+.price-monogram>span{font-size:9px;color:#7a9ccf;font-weight:500}
+.price-bar-track{position:relative;height:22px;display:flex;align-items:center;gap:10px;min-width:0}
+.price-bar{height:10px;border-radius:6px;background:linear-gradient(90deg,#3a1219,#b3313f);width:0;transition:width 1.1s cubic-bezier(.22,.61,.36,1);flex:none}
+.price-amount{font:500 13px var(--mono);color:#e8b4bb;white-space:nowrap}
+.price-amount .per{color:var(--muted);font-weight:400}
+.price-row.us .price-bar{background:linear-gradient(90deg,#1c5c48,var(--green));box-shadow:0 0 18px rgba(121,219,177,.35)}
+.price-row.us .price-amount{color:var(--green);font-weight:700}
+.price-row.us .price-monogram{border-color:#2e6b57;background:#10231d}
+.price-axis{display:flex;justify-content:space-between;margin:12px 0 0 204px;font:10px var(--mono);color:#5e6f85;border-top:1px solid var(--line);padding-top:8px}
+@media (max-width:720px){.price-row{grid-template-columns:1fr;gap:6px}.price-axis{margin-left:0}}

@@ -34,3 +34,23 @@ menu.addEventListener('click',()=>{const open=menu.getAttribute('aria-expanded')
 navigation.querySelectorAll('a').forEach(link=>link.addEventListener('click',closeMenu));
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&menu.getAttribute('aria-expanded')==='true'){closeMenu();menu.focus();}});
 document.addEventListener('click',event=>{if(!event.target.closest('.nav'))closeMenu();});
+// Cost-comparison bars: animate when the panel scrolls into view.
+const pricingPanel=document.querySelector('.pricing-panel');
+if(pricingPanel){
+  const priceBars=pricingPanel.querySelectorAll('.price-bar');
+  let shown=false;
+  const show=()=>{ if(shown)return; shown=true; priceBars.forEach(bar=>{bar.style.width=bar.dataset.width||bar.style.width;}); };
+  if('IntersectionObserver'in window){
+    const reveal=new IntersectionObserver(entries=>{ entries.forEach(entry=>{ if(entry.isIntersecting){show();reveal.disconnect();} }); },{threshold:0.25});
+    reveal.observe(pricingPanel);
+  }
+  // Fallbacks: in view at load, or scrolled into view later.
+  const inView=()=>{ const r=pricingPanel.getBoundingClientRect(); return r.top<innerHeight*0.85&&r.bottom>0; };
+  if(inView())show();
+  else{
+    let ticking=false;
+    const onScroll=()=>{ if(ticking)return; ticking=true; requestAnimationFrame(()=>{ ticking=false; if(inView()){show();removeEventListener('scroll',onScroll);removeEventListener('resize',onScroll);} }); };
+    addEventListener('scroll',onScroll,{passive:true});
+    addEventListener('resize',onScroll,{passive:true});
+  }
+}
