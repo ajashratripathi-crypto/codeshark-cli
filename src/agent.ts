@@ -120,6 +120,7 @@ export async function runAgent(input: string, opts: AgentOptions, events?: Strea
         continue;
       }
       const result = await opts.registry.execute(call.name, call.args, ctx);
+      events?.onToolResult?.(call.name);
       messages.push({
         role: "tool",
         content: result.content,

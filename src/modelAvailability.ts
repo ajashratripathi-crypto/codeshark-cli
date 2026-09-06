@@ -1,11 +1,13 @@
 import { CodeSharkConfig, DEFAULT_GATEWAY_URL, envApiKey } from "./config.js";
 import { MODELS, type ModelInfo } from "./models.js";
 
-export type ModelAvailability = "checking" | "available" | "unavailable";
+export type ModelAvailability = "checking" | "available" | "unavailable" | "busy";
 
 const statuses = new Map<string, ModelAvailability>();
 const reasons = new Map<string, string>();
-const TIMEOUT_MS = 8_000;
+const TIMEOUT_MS = 15_000;
+/** Match the gateway's per-IP inflight cap so probes never queue behind themselves. */
+const MAX_CONCURRENT_CHECKS = 2;
 
 export function modelAvailability(modelId: string): ModelAvailability {
   return statuses.get(modelId) ?? "checking";
@@ -21,6 +23,23 @@ export function modelAvailabilitySnapshot(): Array<{ model: ModelInfo; status: M
     status: modelAvailability(model.id),
     reason: modelAvailabilityReason(model.id),
   }));
+}
+
+/**
+ * Classify a failed probe. "busy" covers transient lane problems (rate
+ * limits, upstream hiccups, timeouts) where the model is likely fine but
+ * the shared free lane is momentarily overloaded — those must NOT read as
+ * "model removed". Only explicit client errors mean the model itself is
+ * not servable right now.
+ */
+export function classifyProbeFailure(statusOrError: number | Error): { status: ModelAvailability; reason: string } {
+  if (statusOrError instanceof Error) {
+    if (statusOrError.name === "AbortError") return { status: "busy", reason: "lane busy — timed out" };
+    return { status: "busy", reason: statusOrError.message || "network error" };
+  }
+  if (statusOrError === 429) return { status: "busy", reason: "rate limited — try again shortly" };
+  if (statusOrError >= 500) return { status: "busy", reason: `lane busy — HTTP ${statusOrError}` };
+  return { status: "unavailable", reason: `HTTP ${statusOrError}` };
 }
 
 function endpointFor(model: ModelInfo, cfg: CodeSharkConfig): { url: string; key?: string } {
@@ -62,7 +81,12 @@ async function checkOne(model: ModelInfo, cfg: CodeSharkConfig): Promise<void> {
         body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "Reply with OK." }] }] }),
         signal: controller.signal,
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        const { status, reason } = classifyProbeFailure(response.status);
+        statuses.set(model.id, status);
+        reasons.set(model.id, reason);
+        return;
+      }
     } else {
       const response = await fetch(target.url, {
         method: "POST",
@@ -70,13 +94,19 @@ async function checkOne(model: ModelInfo, cfg: CodeSharkConfig): Promise<void> {
         body: JSON.stringify({ model: model.model, messages: [{ role: "user", content: "Reply with OK." }], stream: false, max_tokens: 4 }),
         signal: controller.signal,
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        const { status, reason } = classifyProbeFailure(response.status);
+        statuses.set(model.id, status);
+        reasons.set(model.id, reason);
+        return;
+      }
     }
     statuses.set(model.id, "available");
     reasons.delete(model.id);
   } catch (error) {
-    statuses.set(model.id, "unavailable");
-    reasons.set(model.id, error instanceof Error && error.name === "AbortError" ? "check timed out" : error instanceof Error ? error.message : String(error));
+    const { status, reason } = classifyProbeFailure(error instanceof Error ? error : new Error(String(error)));
+    statuses.set(model.id, status);
+    reasons.set(model.id, reason);
   } finally {
     clearTimeout(timer);
   }
@@ -87,5 +117,13 @@ export async function checkModelAvailability(cfg: CodeSharkConfig): Promise<void
     statuses.set(model.id, "checking");
     reasons.delete(model.id);
   }
-  await Promise.all(MODELS.map((model) => checkOne(model, cfg)));
+  // Throttle to the gateway's per-IP inflight limit: firing all probes at
+  // once makes them queue behind each other and time out spuriously.
+  const queue = [...MODELS];
+  const workers = Array.from({ length: Math.min(MAX_CONCURRENT_CHECKS, queue.length) }, async () => {
+    for (let model = queue.shift(); model; model = queue.shift()) {
+      await checkOne(model, cfg);
+    }
+  });
+  await Promise.all(workers);
 }

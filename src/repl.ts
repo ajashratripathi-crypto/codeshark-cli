@@ -10,6 +10,7 @@ import { DEFAULT_MODEL_ID, MODELS, findModel } from "./models.js";
 import { resolveClients } from "./provider/index.js";
 import { launchKeysPage } from "./keysPage.js";
 import { defaultSystemPrompt, type AgentMode } from "./system.js";
+import { startActivityIndicator, toolPhase } from "./loading.js";
 import { modelAvailability, modelAvailabilityReason } from "./modelAvailability.js";
 
 export interface ReplOptions {
@@ -66,9 +67,15 @@ export function printModelInfo(): void {
   for (const m of MODELS) {
     const active = m.id === (findModel(cfg.model ?? "")?.id ?? DEFAULT_MODEL_ID);
     const status = modelAvailability(m.id);
-    const marker = status === "available" ? hex("#4ade80", "●") : status === "unavailable" ? hex("#f87171", "✗") : dim("○");
-    const note = status === "unavailable" ? `Unavailable${modelAvailabilityReason(m.id) ? ` — ${modelAvailabilityReason(m.id)}` : ""}` : m.notes;
-    console.log(`    ${marker} ${m.label.padEnd(28)} ${dim(m.context.padEnd(5))} ${status === "unavailable" ? hex("#f87171", note) : note}`);
+    const marker = status === "available" ? hex("#4ade80", "●") : status === "unavailable" ? hex("#f87171", "✗") : status === "busy" ? hex("#fbbf24", "◐") : dim("○");
+    const note =
+      status === "unavailable"
+        ? `Unavailable${modelAvailabilityReason(m.id) ? ` — ${modelAvailabilityReason(m.id)}` : ""}`
+        : status === "busy"
+          ? `Lane busy${modelAvailabilityReason(m.id) ? ` — ${modelAvailabilityReason(m.id)}` : ""} — should still work`
+          : m.notes;
+    const styled = status === "unavailable" ? hex("#f87171", note) : status === "busy" ? hex("#fbbf24", note) : note;
+    console.log(`    ${marker} ${m.label.padEnd(28)} ${dim(m.context.padEnd(5))} ${styled}`);
   }
   console.log("");
   console.log(dim("  Switch with: /model <name>"));
@@ -103,6 +110,10 @@ export function switchModel(query: string): void {
     console.log(hex("#f87171", `  ✗ ${entry.label} is currently unavailable.`));
     console.log(dim(`  ${modelAvailabilityReason(entry.id) ?? "The boot health check failed."}`));
     return;
+  }
+
+  if (modelAvailability(entry.id) === "busy") {
+    console.log(hex("#fbbf24", `  ⚠ ${entry.label}'s shared lane is busy right now — switching anyway. Requests may wait or retry.`));
   }
 
   cfg.model = entry.id;
@@ -227,10 +238,25 @@ export async function startRepl(opts: ReplOptions): Promise<void> {
     // Keep input active so Ctrl+C can cancel while the model is working.
     rl.resume();
     console.log("");
+    const activity = startActivityIndicator("Thinking");
+    let activityActive = true;
+    const stopActivity = () => {
+      if (activityActive) {
+        activityActive = false;
+        activity.stop();
+      }
+    };
     const events: StreamEvents = {
-      onText: (delta) => process.stdout.write(delta),
+      onText: (delta) => {
+        stopActivity();
+        process.stdout.write(delta);
+      },
       onToolCall: (call) => {
         console.log(dim(`  ⚙ ${call.name}(${briefArgs(call.args)})`));
+        activity.setPhase(toolPhase(call.name));
+      },
+      onToolResult: (toolName) => {
+        activity.setPhase(toolName === "finish" ? "Wrapping up" : "Thinking");
       },
       onDebug: (msg) => console.log(dim(msg)),
     };
@@ -245,13 +271,21 @@ export async function startRepl(opts: ReplOptions): Promise<void> {
           systemPrompt: cfg.systemPrompt ?? defaultSystemPrompt(opts.cwd, mode),
           readOnly: mode === "plan",
           maxIterations: cfg.maxIterations,
-          approveToolCall: (call) => approveToolCall(rl, call, controller?.signal),
+          approveToolCall: async (call) => {
+            activity.pause();
+            try {
+              return await approveToolCall(rl, call, controller?.signal);
+            } finally {
+              activity.resume(toolPhase(call.name));
+            }
+          },
           signal: controller.signal,
           debug: opts.debug,
           initialMessages: history,
         },
         events,
       );
+      stopActivity();
       history = result.history;
       if (result.streamedText) {
         if (!result.streamedText.endsWith("\n")) process.stdout.write("\n");
@@ -259,6 +293,7 @@ export async function startRepl(opts: ReplOptions): Promise<void> {
         process.stdout.write(result.text.endsWith("\n") ? result.text : result.text + "\n");
       }
     } catch (e) {
+      stopActivity();
       console.log("");
       if (e instanceof ProviderError) {
         console.log(hex("#f87171", `  ✗ ${e.message}`));

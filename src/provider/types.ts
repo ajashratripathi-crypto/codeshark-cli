@@ -26,6 +26,8 @@ export interface ToolSchema {
 export interface StreamEvents {
   onText?: (delta: string) => void;
   onToolCall?: (call: ToolCall) => void;
+  /** Fired after a tool finishes executing, with the tool's name. */
+  onToolResult?: (toolName: string) => void;
   onDebug?: (msg: string) => void;
 }
 

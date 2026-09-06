@@ -4,7 +4,7 @@ import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { bold, dim, hex } from "./ansi.js";
 import { printBanner } from "./banner.js";
-import { showLoading, startThinkingSpinner } from "./loading.js";
+import { showLoading, startActivityIndicator, toolPhase } from "./loading.js";
 import { loadConfig, saveConfig } from "./config.js";
 import { readTerms } from "./terms.js";
 import { resolveClients } from "./provider/index.js";
@@ -84,16 +84,27 @@ async function runOneShot(prompt: string): Promise<void> {
   const cwd = process.cwd();
   const registry = createRegistry();
   const clients = resolveClients(cfg, (m) => console.error(dim(m)));
-  // Show a "thinking" spinner until the first token arrives, then stream.
-  const stopThinking = startThinkingSpinner("Thinking");
-  let thinking = true;
+  // A live indicator shows what the agent is doing (Thinking, Reading
+  // files, Running commands, …) until the first token arrives, then the
+  // answer streams over it.
+  let activityActive = true;
+  const stopActivity = () => {
+    if (activityActive) {
+      activityActive = false;
+      activity.stop();
+    }
+  };
+  const activity = startActivityIndicator("Thinking");
   const events = {
     onText: (d: string) => {
-      if (thinking) {
-        thinking = false;
-        stopThinking();
-      }
+      stopActivity();
       process.stdout.write(d);
+    },
+    onToolCall: (call: ToolCall) => {
+      activity.setPhase(toolPhase(call.name));
+    },
+    onToolResult: () => {
+      activity.setPhase("Thinking");
     },
   };
   const approvalRl = process.stdin.isTTY ? createInterface({ input, output }) : undefined;
@@ -103,27 +114,28 @@ async function runOneShot(prompt: string): Promise<void> {
       {
         clients,
         registry,
-        cwd,
-        approveToolCall: approvalRl
-          ? async (call: ToolCall) => {
-              const answer = await approvalRl.question(`\nApprove ${call.name}? [y/N]: `);
-              return answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes";
-            }
-          : async () => false,
+        cwd,          approveToolCall: approvalRl
+            ? async (call: ToolCall) => {
+                activity.pause();
+                try {
+                  const answer = await approvalRl.question(`\nApprove ${call.name}? [y/N]: `);
+                  return answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes";
+                } finally {
+                  activity.resume(toolPhase(call.name));
+                }
+              }
+            : async () => false,
       },
       events,
     );
-    if (thinking) {
-      thinking = false;
-      stopThinking();
-    }
+    stopActivity();
     if (result.streamedText) {
       if (!result.streamedText.endsWith("\n")) process.stdout.write("\n");
     } else {
       process.stdout.write(result.text.endsWith("\n") ? result.text : result.text + "\n");
     }
   } catch (e) {
-    if (thinking) stopThinking();
+    stopActivity();
     console.error(hex("#f87171", `✗ ${errorMessage(e)}`));
     process.exitCode = 1;
   } finally {
@@ -267,7 +279,9 @@ async function main(): Promise<void> {
     for (const { model, status, reason } of modelAvailabilitySnapshot()) {
       if (status === "available") {
         console.log(`    ${hex("#4ade80", "✓ Available")}  ${model.label}`);
-      } else {
+      } else if (status === "busy") {
+        console.log(`    ${hex("#fbbf24", "~ Lane busy")}  ${model.label}${reason ? dim(` — ${reason}`) : ""}`);
+      } else if (status === "unavailable") {
         console.log(`    ${hex("#f87171", "✗ Unavailable")}  ${model.label}${reason ? dim(` — ${reason}`) : ""}`);
       }
     }
