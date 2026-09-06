@@ -6,10 +6,11 @@ import { ToolRegistry } from "./tools/index.js";
 import { ChatClient, ChatMessage, ProviderError, StreamEvents, ToolCall, errorMessage } from "./provider/types.js";
 import { runSetup } from "./setup.js";
 import { loadConfig, modelLabel, saveConfig } from "./config.js";
-import { DEFAULT_MODEL_ID, MODELS, findModel } from "./models.js";
+import { DEFAULT_MODEL_ID, MODELS, RETIRED_MODELS, findModel, isRetiredModel } from "./models.js";
 import { resolveClients } from "./provider/index.js";
 import { launchKeysPage } from "./keysPage.js";
 import { defaultSystemPrompt, type AgentMode } from "./system.js";
+import { modelAvailability, modelAvailabilityReason } from "./modelAvailability.js";
 
 export interface ReplOptions {
   cwd: string;
@@ -30,10 +31,9 @@ function briefArgs(args: Record<string, unknown>): string {
   return s.length > 90 ? s.slice(0, 90) + "…" : s;
 }
 
-async function approveToolCall(rl: Interface, call: ToolCall): Promise<boolean> {
+async function approveToolCall(rl: Interface, call: ToolCall, signal?: AbortSignal): Promise<boolean> {
   rl.resume();
-  const answer = await rl.question(`\n  Approve ${call.name}(${briefArgs(call.args)})? [y/N]: `);
-  rl.pause();
+  const answer = await rl.question(`\n  Approve ${call.name}(${briefArgs(call.args)})? [y/N]: `, { signal });
   return answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes";
 }
 
@@ -44,7 +44,7 @@ function printHelp(): void {
       bold("  CodeShark commands"),
       dim("    /help            show this help"),
       dim("    /model           show the active model and the full catalog"),
-      dim("    /model <name>    switch model, e.g. /model glm or /model kimi-k3"),
+      dim("    /model <name>    switch model, e.g. /model glm or /model deepseek"),
       dim("    /keys            open the password-protected local API key page"),
       dim("    /key-status      show masked key status in the terminal"),
       dim("    /setup           guided setup wizard (providers / keys)"),
@@ -65,11 +65,21 @@ export function printModelInfo(): void {
   console.log(bold("  Model catalog"));
   for (const m of MODELS) {
     const active = m.id === (findModel(cfg.model ?? "")?.id ?? DEFAULT_MODEL_ID);
-    const marker = active ? hex("#4ade80", "●") : dim("○");
-    console.log(`    ${marker} ${m.label.padEnd(28)} ${dim(m.context.padEnd(5))} ${m.notes}`);
+    const status = modelAvailability(m.id);
+    const marker = status === "available" ? hex("#4ade80", "●") : status === "unavailable" ? hex("#f87171", "✗") : dim("○");
+    const note = status === "unavailable" ? `Unavailable${modelAvailabilityReason(m.id) ? ` — ${modelAvailabilityReason(m.id)}` : ""}` : m.notes;
+    console.log(`    ${marker} ${m.label.padEnd(28)} ${dim(m.context.padEnd(5))} ${status === "unavailable" ? hex("#f87171", note) : note}`);
+  }
+  for (const m of RETIRED_MODELS) {
+    console.log(`    ${hex("#f87171", "✗")} ${m.label.padEnd(28)} ${dim(m.context.padEnd(5))} ${hex("#f87171", "Unavailable — removed by provider")}`);
+  }
+  const cfgModel = loadConfig().model;
+  if (cfgModel && isRetiredModel(cfgModel)) {
+    console.log(hex("#f87171", `  ✗ Saved model "${cfgModel}" is unavailable. Using ${findModel(DEFAULT_MODEL_ID)?.label ?? DEFAULT_MODEL_ID}.`));
   }
   console.log("");
-  console.log(dim("  Switch with: /model <name>   e.g. /model glm, /model kimi, /model gpt"));
+  console.log(dim("  Switch with: /model <name>"));
+  console.log(dim("  Names: gpt, deepseek, minimax, glm, gemini-3.6, sarvam, gpt-oss, nemotron"));
   console.log("");
 }
 
@@ -90,6 +100,18 @@ export function switchModel(query: string): void {
     return;
   }
 
+  if (entry.available === false) {
+    console.log(hex("#f87171", `  ✗ ${entry.label} is unavailable — it was removed by the provider.`));
+    console.log(dim("  Choose one of the currently available models listed by /model."));
+    return;
+  }
+
+  if (modelAvailability(entry.id) === "unavailable") {
+    console.log(hex("#f87171", `  ✗ ${entry.label} is currently unavailable.`));
+    console.log(dim(`  ${modelAvailabilityReason(entry.id) ?? "The boot health check failed."}`));
+    return;
+  }
+
   cfg.model = entry.id;
   saveConfig(cfg);
   console.log(`  ${hex("#4ade80", "✓")} Switched to ${bold(entry.label)} ${dim(`(${entry.context} context)`)}`);
@@ -105,14 +127,14 @@ function printKeys(): void {
   const or = Boolean(cfg.openrouterApiKey ?? process.env.OPENROUTER_API_KEY);
   const nv = Boolean(cfg.nvidiaApiKey ?? process.env.NVIDIA_API_KEY);
   const gm = Boolean(cfg.geminiApiKey ?? process.env.GEMINI_API_KEY);
-  console.log(`    ${ur ? hex("#4ade80", "✓") : dim("○")} UnoRouter    ${ur ? dim("(configured)") : dim("(not set)")}  → https://unorouter.com/en/tokens ${dim("key: shown once")}`);
+  console.log(`    ${ur ? hex("#4ade80", "✓") : dim("○")} Model API    ${ur ? dim("(configured)") : dim("(not set)")}  ${dim("key: shown once")}`);
   console.log(`    ${or ? hex("#4ade80", "✓") : dim("○")} OpenRouter   ${or ? dim("(configured)") : dim("(not set)")}  → https://openrouter.ai/keys  ${dim("key: sk-or-v1-…")}`);
   console.log(`    ${nv ? hex("#4ade80", "✓") : dim("○")} NVIDIA NIM   ${nv ? dim("(configured)") : dim("(not set)")}  → https://build.nvidia.com   ${dim("key: nvapi-…")}`);
   console.log(`    ${gm ? hex("#4ade80", "✓") : dim("○")} Google AI Studio ${gm ? dim("(configured)") : dim("(not set)")}  → https://aistudio.google.com/apikey ${dim("key: AIza…")}`);
   console.log("");
   console.log(dim("  Add one: run /setup, or paste it into ~/.codeshark.json like:"));
-  console.log(dim('    { "unorouterApiKey": "ur-…", "openrouterApiKey": "sk-or-v1-…" }'));
-  console.log(dim("  Or set env vars: UNOROUTER_API_KEY, OPENROUTER_API_KEY, NVIDIA_API_KEY, GEMINI_API_KEY"));
+  console.log(dim('    { "unorouterApiKey": "your-key", "openrouterApiKey": "sk-or-v1-…" }'));
+  console.log(dim("  Or set the provider environment variables configured for your deployment."));
   console.log("");
 }
 
@@ -121,17 +143,24 @@ export async function startRepl(opts: ReplOptions): Promise<void> {
   rl.setPrompt(PROMPT);
   let history: ChatMessage[] = [];
   let mode: AgentMode = "build";
+  let busy = false;
+  let controller: AbortController | undefined;
 
-  console.log(dim("  Type a message and press Enter. /help for commands · Ctrl+C to quit."));
+  console.log(dim("  Type a message and press Enter. /help for commands · Ctrl+C cancels a request; press again to quit."));
   rl.prompt();
 
   rl.on("SIGINT", () => {
+    if (controller && !controller.signal.aborted) {
+      controller.abort(new Error("Request cancelled."));
+      return;
+    }
     console.log("");
     console.log(dim("Bye!"));
     process.exit(0);
   });
 
   rl.on("line", async (raw) => {
+    if (busy) return;
     const line = raw.trim();
     if (!line) {
       if (!replClosed(rl)) rl.prompt();
@@ -140,6 +169,8 @@ export async function startRepl(opts: ReplOptions): Promise<void> {
 
     // Commands
     if (line.startsWith("/")) {
+      busy = true;
+      try {
       const [cmd, ...rest] = line.slice(1).split(/\s+/);
       switch (cmd) {
         case "help":
@@ -187,12 +218,21 @@ export async function startRepl(opts: ReplOptions): Promise<void> {
         default:
           console.log(dim(`  Unknown command "${cmd}". Try /help.`));
       }
+      } catch (error) {
+        console.log(hex("#f87171", "  " + errorMessage(error)));
+      } finally {
+        busy = false;
+        if (!replClosed(rl)) rl.resume();
+      }
       if (!replClosed(rl)) rl.prompt();
       return;
     }
 
     // Agent run
-    rl.pause();
+    busy = true;
+    controller = new AbortController();
+    // Keep input active so Ctrl+C can cancel while the model is working.
+    rl.resume();
     console.log("");
     const events: StreamEvents = {
       onText: (delta) => process.stdout.write(delta),
@@ -202,14 +242,18 @@ export async function startRepl(opts: ReplOptions): Promise<void> {
       onDebug: (msg) => console.log(dim(msg)),
     };
     try {
+      const cfg = loadConfig();
       const result = await runAgent(
         line,
         {
           clients: opts.getClients(),
           registry: opts.registry,
           cwd: opts.cwd,
-          systemPrompt: defaultSystemPrompt(opts.cwd, mode),
-          approveToolCall: (call) => approveToolCall(rl, call),
+          systemPrompt: cfg.systemPrompt ?? defaultSystemPrompt(opts.cwd, mode),
+          readOnly: mode === "plan",
+          maxIterations: cfg.maxIterations,
+          approveToolCall: (call) => approveToolCall(rl, call, controller?.signal),
+          signal: controller.signal,
           debug: opts.debug,
           initialMessages: history,
         },
@@ -234,6 +278,8 @@ export async function startRepl(opts: ReplOptions): Promise<void> {
         console.log(hex("#f87171", `  ✗ ${errorMessage(e)}`));
       }
     }
+    busy = false;
+    controller = undefined;
     console.log("");
     if (!replClosed(rl)) {
       rl.resume();

@@ -41,14 +41,12 @@ const NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
  */
 const OPENROUTER_ALIASES: Record<string, string> = {
   "gpt-5.6-sol:free": "openrouter/free",
-  "deepseek-v4-flash-0731:free": "deepseek/deepseek-v4-flash-0731:free",
   "glm-5.3-flash-thinking:free": "z-ai/glm-5.3-flash-thinking:free",
   "kimi-k3:free": "moonshotai/kimi-k3:free",
   "gemini-3.6-flash:free": "google/gemini-3.6-flash:free",
 };
 
 const NVIDIA_ALIASES: Record<string, string> = {
-  "deepseek-v4-flash-0731:free": "deepseek-ai/deepseek-v4-flash",
   "glm-5.3-flash-thinking:free": "zai-org/glm-5.3-flash-thinking",
   "kimi-k3:free": "moonshotai/kimi-k3",
 };
@@ -235,7 +233,7 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
 
   if (!body.messages) return json({ error: { message: "messages is required.", code: 400 } }, 400);
 
-  const model = typeof body.model === "string" ? body.model : "glm-5.3-flash-thinking:free";
+  const model = typeof body.model === "string" ? body.model : "glm-5.3-flash-think-search:free";
   if (!isFreeModel(model)) {
     return json(
       {

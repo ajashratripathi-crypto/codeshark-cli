@@ -1,4 +1,4 @@
-import { activeProvider, CodeSharkConfig, envApiKey } from "../config.js";
+import { activeModelId, activeProvider, CodeSharkConfig, envApiKey } from "../config.js";
 import { createGatewayClient } from "./gateway.js";
 import { createGeminiClient } from "./gemini.js";
 import { createNvidiaClient } from "./nvidia.js";
@@ -6,6 +6,7 @@ import { createOllamaClient } from "./ollama.js";
 import { createOpenRouterClient } from "./openrouter.js";
 import { createUnoRouterClient } from "./unorouter.js";
 import { ChatClient } from "./types.js";
+import { findModel } from "../models.js";
 
 /**
  * Build the ordered list of ChatClients for this machine:
@@ -20,6 +21,7 @@ export function resolveClients(cfg: CodeSharkConfig, debug?: (msg: string) => vo
   const has = (provider: string) => clients.some((c) => c.provider === provider);
 
   const primary = activeProvider(cfg);
+  const selectedModel = activeModelId(cfg);
   switch (primary) {
     case "openrouter": {
       const key = cfg.openrouterApiKey ?? envApiKey("openrouter");
@@ -57,6 +59,10 @@ export function resolveClients(cfg: CodeSharkConfig, debug?: (msg: string) => vo
       add(createGatewayClient(cfg));
       break;
   }
+
+  // UnoRouter catalog selections must not silently become a different model
+  // through another provider's fallback chain.
+  if (selectedModel.startsWith("unorouter/") || findModel(selectedModel)) return clients;
 
   // Automatic free fallbacks, deduped: any other provider you have a key for.
   if (!has("openrouter")) {

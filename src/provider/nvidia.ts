@@ -6,7 +6,7 @@ import { toApiSlug } from "../models.js";
 export const DEFAULT_NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
 
 /**
- * NVIDIA NIM hosts open models (DeepSeek, Kimi, GLM, Nemotron, …) behind a
+ * NVIDIA NIM hosts open models behind a
  * free, OpenAI-compatible API. Get a key at https://build.nvidia.com —
  * no credit card, keys start with `nvapi-`.
  */

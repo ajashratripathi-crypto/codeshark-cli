@@ -2,17 +2,89 @@ import { hex, bold, dim, stripAnsi } from "./ansi.js";
 import { modelLabel, loadConfig, activeModelId } from "./config.js";
 import { findModel } from "./models.js";
 
-const WORDMARK = "CodeShark";
+const WORDMARK = "CODESHARK";
 const WORDMARK_GLYPHS: Record<string, string[]> = {
-  C: ["01110", "11011", "11000", "11000", "11000", "11011", "01110"],
-  O: ["01110", "11011", "11011", "11011", "11011", "11011", "01110"],
-  D: ["11110", "11011", "11011", "11011", "11011", "11011", "11110"],
-  E: ["11111", "11000", "11000", "11110", "11000", "11000", "11111"],
-  S: ["01111", "11000", "11000", "01110", "00011", "00011", "11110"],
-  H: ["1100011", "1100011", "1100011", "1111111", "1100011", "1100011", "1100011"],
-  A: ["0011100", "0110110", "1100011", "1100011", "1111111", "1100011", "1100011"],
-  R: ["11110", "11011", "11011", "11110", "11100", "11010", "11011"],
-  K: ["11011", "11011", "11110", "11100", "11110", "11011", "11011"],
+  "C": [
+    "01111",
+    "10000",
+    "10000",
+    "10000",
+    "10000",
+    "10000",
+    "01111"
+  ],
+  "O": [
+    "01110",
+    "10001",
+    "10001",
+    "10001",
+    "10001",
+    "10001",
+    "01110"
+  ],
+  "D": [
+    "11110",
+    "10001",
+    "10001",
+    "10001",
+    "10001",
+    "10001",
+    "11110"
+  ],
+  "E": [
+    "11111",
+    "10000",
+    "10000",
+    "11110",
+    "10000",
+    "10000",
+    "11111"
+  ],
+  "S": [
+    "01111",
+    "10000",
+    "10000",
+    "01110",
+    "00001",
+    "00001",
+    "11110"
+  ],
+  "H": [
+    "10001",
+    "10001",
+    "10001",
+    "11111",
+    "10001",
+    "10001",
+    "10001"
+  ],
+  "A": [
+    "01110",
+    "10001",
+    "10001",
+    "11111",
+    "10001",
+    "10001",
+    "10001"
+  ],
+  "R": [
+    "11110",
+    "10001",
+    "10001",
+    "11110",
+    "10100",
+    "10010",
+    "10001"
+  ],
+  "K": [
+    "10001",
+    "10010",
+    "10100",
+    "11000",
+    "10100",
+    "10010",
+    "10001"
+  ]
 };
 
 function interpolate(start: number, end: number, amount: number): number {
@@ -37,7 +109,10 @@ function gradientColor(index: number, length: number): string {
     .join("")}`;
 }
 
-function renderWordmark(plain: boolean): string {
+function renderWordmark(plain: boolean, columns: number): string {
+  // Leave a spare column to avoid terminal auto-wrap.
+  if (columns < 56) return plain ? WORDMARK : bold(hex("#9bdcff", WORDMARK));
+  const pixelWidth = columns >= 101 ? 2 : 1;
   const letters = [...WORDMARK.toUpperCase()];
   const sharkStart = 4;
   const sharkLength = letters.length - sharkStart;
@@ -46,8 +121,8 @@ function renderWordmark(plain: boolean): string {
     letters.forEach((letter, letterIndex) => {
       const glyph = WORDMARK_GLYPHS[letter]!;
       const pixels = [...glyph[row]!].map((pixel) => {
-        if (pixel === "0") return "  ";
-        const block = "██";
+        if (pixel === "0") return " ".repeat(pixelWidth);
+        const block = "\u2588".repeat(pixelWidth);
         if (plain) return block;
         return letterIndex < sharkStart ? bold(hex("#f8fafc", block)) : hex(gradientColor(letterIndex - sharkStart, sharkLength), block);
       });
@@ -59,6 +134,7 @@ function renderWordmark(plain: boolean): string {
 
 export interface BannerOptions {
   plain?: boolean;
+  columns?: number;
   modelLine?: string;
   cwd?: string;
   footer?: string;
@@ -73,11 +149,11 @@ export function renderBanner(opts: BannerOptions = {}): string {
     opts.modelLine ?? (entry ? `${baseLabel} · ${entry.context} context` : baseLabel);
   const cwd = opts.cwd ?? process.cwd();
 
-  const title = renderWordmark(plain);
+  const title = renderWordmark(plain, opts.columns ?? process.stdout.columns ?? 80);
   const sub = plain ? modelLine : hex("#8ba3ba", modelLine);
   const dir = plain ? cwd : dim(cwd);
 
-  const lines = ["  " + title, "", "  " + sub, "  " + dir];
+  const lines = [...title.split("\n").map((line) => "  " + line), "", "  " + sub, "  " + dir];
 
   if (opts.footer) lines.push("", opts.footer);
   return lines.join("\n") + "\n";
@@ -88,5 +164,8 @@ export function printBanner(opts: BannerOptions = {}): void {
 }
 
 export function bannerHasTitle(text: string): boolean {
-  return stripAnsi(text).includes("CodeShark");
+  const clean = stripAnsi(text);
+  return clean.includes(WORDMARK) || [56, 101].some((columns) =>
+    clean.includes(renderWordmark(true, columns).split("\n").map((line) => "  " + line).join("\n")),
+  );
 }

@@ -1,5 +1,5 @@
-import { statSync } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { statSync, lstatSync, realpathSync } from "node:fs";
+import { isAbsolute, dirname, relative, resolve, sep } from "node:path";
 
 export class ProjectFolderError extends Error {
   constructor(message: string) {
@@ -25,9 +25,22 @@ export function requireProjectFolder(folder = process.cwd()): string {
 export function resolveProjectPath(input: string, cwd: string): string {
   const root = resolve(cwd);
   const target = isAbsolute(input) ? resolve(input) : resolve(root, input);
-  const rel = relative(root, target);
-  if (rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel))) return target;
-  throw new ProjectFolderError(`Path escapes the project folder: ${input}`);
+  const inside = (base: string, candidate: string): boolean => {
+    const path = relative(base, candidate);
+    return path === "" || (path !== ".." && !path.startsWith(".." + sep) && !isAbsolute(path));
+  };
+  if (!inside(root, target)) throw new ProjectFolderError("Path escapes the project folder: " + input);
+  // Validate existing ancestors so links cannot redirect new writes outside the project.
+  let ancestor = target;
+  while (!lstatSync(ancestor, { throwIfNoEntry: false })) {
+    const parent = dirname(ancestor);
+    if (parent === ancestor) throw new ProjectFolderError("Cannot resolve project path: " + input);
+    ancestor = parent;
+  }
+  if (!inside(realpathSync(root), realpathSync(ancestor))) {
+    throw new ProjectFolderError("Path escapes the project folder through a link: " + input);
+  }
+  return target;
 }
 
 /** Change into an explicitly selected project folder before starting CodeShark. */

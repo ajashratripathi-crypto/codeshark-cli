@@ -2,9 +2,11 @@ import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { exec } from "node:child_process";
 import { bold, dim, hex } from "./ansi.js";
-import { CodeSharkConfig, configPath, hasApiKey, loadConfig, saveConfig } from "./config.js";
+import { CodeSharkConfig, DEFAULT_GEMINI_MODEL, configPath, hasApiKey, loadConfig, saveConfig } from "./config.js";
 import { createUnoRouterClient } from "./provider/unorouter.js";
 import { createGeminiClient } from "./provider/gemini.js";
+import { createNvidiaClient } from "./provider/nvidia.js";
+import { createOpenRouterClient } from "./provider/openrouter.js";
 import { createOllamaClient, ollamaAvailable } from "./provider/ollama.js";
 import { MODELS } from "./models.js";
 import { ChatClient, errorMessage } from "./provider/types.js";
@@ -144,18 +146,56 @@ export async function runSetupFlow(
     return true;
   }
 
-  // Choice 2 — the user's own key (typed into the terminal, never echoed).
-  console.log(bold("  Step 1 — UnoRouter key (unlocks all 5 models)"));
-  console.log(dim("    1. Open https://unorouter.com/en/tokens  (sign up with Discord/GitHub, no card)"));
-  console.log(dim("    2. Create an API key on the Tokens page — it is shown exactly once — and copy it"));
+  // Choice 2 — choose which provider key to configure.
+  console.log(bold("  Choose an API provider"));
+  console.log(dim("    [1] Primary model API — eight free catalog models"));
+  console.log(dim("    [2] Gemini API"));
+  console.log(dim("    [3] NVIDIA NIM"));
+  console.log(dim("    [4] OpenRouter"));
+  console.log(dim("    [5] Cancel"));
+  const keyChoice = (await rl.question("  Choose [1-5]: ")).trim();
+  if (keyChoice === "5") return false;
+
+  if (keyChoice === "2") {
+    const gk = await askSecret("  Paste your Gemini API key (Enter to skip): ");
+    if (!gk) return false;
+    cfg.geminiApiKey = gk;
+    cfg.provider = "gemini";
+    cfg.model = DEFAULT_GEMINI_MODEL;
+    await testClient("Gemini", createGeminiClient(cfg, gk));
+    saveDone(cfg);
+    return true;
+  }
+  if (keyChoice === "3") {
+    const nk = await askSecret("  Paste your NVIDIA API key (Enter to skip): ");
+    if (!nk) return false;
+    cfg.nvidiaApiKey = nk;
+    cfg.provider = "nvidia";
+    await testClient("NVIDIA", createNvidiaClient(cfg, nk));
+    saveDone(cfg);
+    return true;
+  }
+  if (keyChoice === "4") {
+    const ok = await askSecret("  Paste your OpenRouter API key (Enter to skip): ");
+    if (!ok) return false;
+    cfg.openrouterApiKey = ok;
+    cfg.provider = "openrouter";
+    await testClient("OpenRouter", createOpenRouterClient(cfg, ok));
+    saveDone(cfg);
+    return true;
+  }
+
+  console.log(bold("  Step 1 — Model API key (unlocks all 8 free models)"));
+  console.log(dim("    1. Open the provider token page shown by your administrator"));
+  console.log(dim("    2. Create an API key — it is shown exactly once — and copy it"));
   console.log(dim("    Your key is typed hidden: it will not appear on screen."));
   openBrowser("https://unorouter.com/en/tokens");
-  const urKey = await askSecret("  Paste your UnoRouter key (Enter to skip): ");
+  const urKey = await askSecret("  Paste your model API key (Enter to skip): ");
 
   if (urKey) {
     cfg.unorouterApiKey = urKey;
     cfg.provider = "unorouter";
-    await testClient("UnoRouter (GLM 5.3 Flash Thinking)", createUnoRouterClient(cfg, urKey));
+    await testClient("Model provider (GLM 5.3 Flash Think Search)", createUnoRouterClient(cfg, urKey));
     await pickModel(rl, cfg);
     saveDone(cfg);
     return true;
@@ -168,7 +208,9 @@ export async function runSetupFlow(
   if (gk) {
     cfg.geminiApiKey = gk;
     cfg.provider = "gemini";
+    cfg.model = DEFAULT_GEMINI_MODEL;
     await testClient("Gemini", createGeminiClient(cfg, gk));
+    await pickModel(rl, cfg);
     saveDone(cfg);
     return true;
   }

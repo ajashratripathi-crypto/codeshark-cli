@@ -1,21 +1,21 @@
 /**
  * The CodeShark model catalog.
  *
- * All five launch models run on UnoRouter (https://unorouter.com), a single
- * OpenAI-compatible endpoint that routes to many upstream providers. `id` is
+ * Most current catalog models run on the shared OpenAI-compatible gateway. `id` is
  * the stable identifier stored in ~/.codeshark.json
- * (`"model": "unorouter/glm-5.3-flash-thinking"`); `model` is the raw slug
+ * (`"model": "unorouter/glm-5.3-flash-think-search"`); `model` is the raw slug
  * sent to the provider's API.
  */
 export interface ModelInfo {
   id: string;
   label: string;
-  provider: "openrouter" | "nvidia" | "unorouter";
+  provider: "openrouter" | "nvidia" | "unorouter" | "gemini";
   /** Raw model slug sent to the provider API. */
   model: string;
   /** Context window, human-readable. */
   context: string;
   notes: string;
+  available?: boolean;
 }
 
 export const MODELS: ModelInfo[] = [
@@ -25,31 +25,31 @@ export const MODELS: ModelInfo[] = [
     provider: "unorouter",
     model: "gpt-5.6-sol:free",
     context: "400K",
-    notes: "OpenAI's frontier reasoning model.",
+    notes: "Frontier reasoning model when available.",
   },
   {
     id: "unorouter/deepseek-v4-flash",
     label: "DeepSeek-V4 Flash",
     provider: "unorouter",
-    model: "deepseek-v4-flash-0731:free",
+    model: "deepseek-v4-flash:free",
     context: "256K",
-    notes: "DeepSeek's fast flash model, strong at code.",
+    notes: "Fast coding model when available.",
   },
   {
-    id: "unorouter/glm-5.3-flash-thinking",
-    label: "GLM 5.3 Flash Thinking",
+    id: "unorouter/minimax-m3",
+    label: "MiniMax M3",
     provider: "unorouter",
-    model: "glm-5.3-flash-thinking:free",
+    model: "minimax-m3:free",
+    context: "128K",
+    notes: "Fast general-purpose coding and reasoning.",
+  },
+  {
+    id: "unorouter/glm-5.3-flash-think-search",
+    label: "GLM 5.3 Flash Think Search",
+    provider: "unorouter",
+    model: "glm-5.3-flash-think-search:free",
     context: "1M",
-    notes: "Zhipu's reasoning coder with 1M context — the default.",
-  },
-  {
-    id: "unorouter/kimi-k3",
-    label: "Kimi-K3",
-    provider: "unorouter",
-    model: "kimi-k3:free",
-    context: "256K",
-    notes: "Moonshot's flagship coding model.",
+    notes: "Reasoning model with search-oriented thinking.",
   },
   {
     id: "unorouter/gemini-3.6-flash",
@@ -57,19 +57,54 @@ export const MODELS: ModelInfo[] = [
     provider: "unorouter",
     model: "gemini-3.6-flash:free",
     context: "1M",
-    notes: "Google's fast flash model with a huge 1M context.",
+    notes: "Fast long-context model for large codebases.",
+  },
+  {
+    id: "unorouter/sarvam-30b",
+    label: "Sarvam 30B",
+    provider: "unorouter",
+    model: "sarvam-30b:free",
+    context: "128K",
+    notes: "Open coding model from Sarvam AI.",
+  },
+  {
+    id: "unorouter/gpt-oss-120b",
+    label: "GPT-OSS 120B",
+    provider: "unorouter",
+    model: "gpt-oss-120b:free",
+    context: "128K",
+    notes: "Large open-weight model for demanding coding tasks.",
+  },
+  {
+    id: "unorouter/nemotron-3-ultra-550b-a55b",
+    label: "Nemotron 3 Ultra 550B A55B",
+    provider: "unorouter",
+    model: "nemotron-3-ultra-550b-a55b:free",
+    context: "256K",
+    notes: "Large-scale open model for deep reasoning.",
   },
 ];
 
-export const DEFAULT_MODEL_ID = "unorouter/glm-5.3-flash-thinking";
+export const RETIRED_MODELS: ModelInfo[] = [
+  { id: "gemini/gemini-3.8-flash", label: "Gemini 3.8 Flash", provider: "gemini", model: "gemini-3.8-flash", context: "-", notes: "Removed from the catalog.", available: false },
+  { id: "unorouter/glm-5.3-flash-thinking", label: "GLM 5.3 Flash Thinking", provider: "unorouter", model: "glm-5.3-flash-thinking:free", context: "-", notes: "Removed from UnoRouter.", available: false },
+  { id: "unorouter/kimi-k3", label: "Kimi-K3", provider: "unorouter", model: "kimi-k3:free", context: "-", notes: "Removed from UnoRouter.", available: false },
+];
+
+export const DEFAULT_MODEL_ID = "unorouter/glm-5.3-flash-think-search";
 
 export function listModels(): ModelInfo[] {
   return [...MODELS];
 }
 
+export function isRetiredModel(idOrSlug: string): boolean {
+  const s = idOrSlug.trim();
+  return RETIRED_MODELS.some((m) => m.id === s || m.model === s);
+}
+
 export function findModel(idOrSlug: string): ModelInfo | undefined {
   const s = idOrSlug.trim();
-  return MODELS.find((m) => m.id === s || m.model === s);
+  return [...MODELS, ...RETIRED_MODELS].find((m) => m.id === s || m.model === s);
 }
 
 /** Map a catalog id (or raw slug) to the raw slug the provider API expects. */

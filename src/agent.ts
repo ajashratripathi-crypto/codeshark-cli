@@ -14,6 +14,8 @@ export interface AgentOptions {
   initialMessages?: ChatMessage[];
   /** Called before each tool runs. Return false to deny the action. */
   approveToolCall?: (call: ToolCall) => Promise<boolean>;
+  readOnly?: boolean;
+  signal?: AbortSignal;
 }
 
 export interface AgentResult {
@@ -34,6 +36,7 @@ export interface AgentResult {
  */
 export async function runAgent(input: string, opts: AgentOptions, events?: StreamEvents): Promise<AgentResult> {
   const maxIterations = opts.maxIterations ?? DEFAULT_MAX_ITERATIONS;
+  if (!Number.isSafeInteger(maxIterations) || maxIterations < 1) throw new Error("maxIterations must be a positive integer.");
   const messages: ChatMessage[] = opts.initialMessages ? [...opts.initialMessages] : [];
   const systemPrompt = opts.systemPrompt ?? defaultSystemPrompt(opts.cwd);
   const systemIndex = messages.findIndex((message) => message.role === "system");
@@ -44,10 +47,11 @@ export async function runAgent(input: string, opts: AgentOptions, events?: Strea
   }
   messages.push({ role: "user", content: input });
 
-  const ctx: ToolContext = { cwd: opts.cwd, log: opts.debug };
+  const ctx: ToolContext = { cwd: opts.cwd, log: opts.debug, readOnly: opts.readOnly, signal: opts.signal };
   let lastError: Error | null = null;
 
   for (let i = 0; i < maxIterations; i++) {
+    opts.signal?.throwIfAborted();
     let assistant: ChatMessage | null = null;
     let streamedText = "";
     for (const client of opts.clients) {
@@ -63,10 +67,15 @@ export async function runAgent(input: string, opts: AgentOptions, events?: Strea
           }
         : undefined;
       try {
-        assistant = await client.chat(messages, opts.registry.schemas(), clientEvents);
+        assistant = await client.chat(messages, opts.registry.schemas(opts.readOnly), clientEvents, opts.signal);
+        if (assistant.role !== "assistant") throw new Error("Provider returned a non-assistant response.");
         streamedText = clientStreamedText;
         break;
       } catch (e) {
+        assistant = null;
+        opts.signal?.throwIfAborted();
+        // A partial answer is already visible; avoid mixing it with another provider's answer.
+        if (clientStreamedText) throw e;
         lastError = e instanceof Error ? e : new Error(String(e));
         opts.debug?.(`[provider] ${client.provider} failed: ${lastError.message}`);
       }
@@ -88,8 +97,14 @@ export async function runAgent(input: string, opts: AgentOptions, events?: Strea
     }
 
     for (const call of calls) {
+      opts.signal?.throwIfAborted();
       if (call.name === "finish") {
         const summary = typeof call.args.summary === "string" && call.args.summary.trim() ? call.args.summary.trim() : "Task complete.";
+        const remaining = calls.slice(calls.indexOf(call));
+        for (const pending of remaining) {
+          messages.push({ role: "tool", content: pending === call ? summary : "Skipped because the task was finished.", toolCallId: pending.id, toolName: pending.name });
+        }
+        messages.push({ role: "assistant", content: summary });
         return { text: summary, iterations: i + 1, history: messages };
       }
       opts.debug?.(`[tool] ${call.name}`);

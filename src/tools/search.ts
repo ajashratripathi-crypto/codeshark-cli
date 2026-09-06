@@ -18,12 +18,18 @@ function exec(cmd: string, args: string[], timeoutMs: number): Promise<ExecResul
     const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (d) => (stdout += d));
-    child.stderr.on("data", (d) => (stderr += d));
+    let truncated = false;
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (d: string) => {
+      if (stdout.length + d.length > 30_000) truncated = true;
+      stdout += d.slice(0, Math.max(0, 30_000 - stdout.length));
+    });
+    child.stderr.on("data", (d: string) => { stderr += d.slice(0, Math.max(0, 1000 - stderr.length)); });
     const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
     child.on("close", (code) => {
       clearTimeout(timer);
-      resolvePromise({ code, stdout, stderr });
+      resolvePromise({ code, stdout: stdout + (truncated ? "\n[Search output truncated; narrow the pattern.]" : ""), stderr });
     });
     child.on("error", () => {
       clearTimeout(timer);
@@ -43,10 +49,10 @@ function parseFlags(flags: string): { caseInsensitive: boolean; filesOnly: boole
 
 /** Dependency-free fallback when ripgrep isn't installed. */
 function jsSearch(root: string, pattern: string, flags: string): string {
-  const { caseInsensitive, filesOnly, context } = parseFlags(flags);
+  const { caseInsensitive, filesOnly, context, word } = parseFlags(flags);
   let rx: RegExp;
   try {
-    rx = new RegExp(pattern, caseInsensitive ? "i" : "");
+    rx = new RegExp(word ? "\\b(?:" + pattern + ")\\b" : pattern, caseInsensitive ? "i" : "");
   } catch {
     return `Invalid regex: ${pattern}`;
   }
@@ -72,6 +78,7 @@ function jsSearch(root: string, pattern: string, flags: string): string {
       if (!e.isFile()) continue;
       let text: string;
       try {
+        if (statSync(full).size > 10 * 1024 * 1024) continue;
         text = readFileSync(full, "utf8");
       } catch {
         continue;
@@ -83,7 +90,7 @@ function jsSearch(root: string, pattern: string, flags: string): string {
         if (lines.some((l) => rx.test(l))) results.push(rel);
         continue;
       }
-      for (let i = 0; i < lines.length; i++) {
+      for (let i = 0; i < lines.length && results.length < MAX_RESULTS; i++) {
         const line = lines[i]!;
         if (!rx.test(line)) continue;
         results.push(`${rel}:${i + 1}:${line.length > 240 ? line.slice(0, 240) + "…" : line}`);
@@ -104,6 +111,7 @@ function jsSearch(root: string, pattern: string, flags: string): string {
 
 export const codeSearchTool: Tool = {
   name: "code_search",
+  readOnly: true,
   description:
     "Search file contents with a regular expression (ripgrep if installed, a built-in fallback otherwise). Returns up to 200 matches with line numbers. Flags: -i case-insensitive, -l files only, -w whole word, -C n context lines.",
   inputSchema: {
@@ -139,6 +147,7 @@ export const codeSearchTool: Tool = {
         ...(/-l/.test(flags) ? ["-l"] : []),
         ...(/-w/.test(flags) ? ["-w"] : []),
         ...(/-C\s*(\d+)/.test(flags) ? ["-C", /-C\s*(\d+)/.exec(flags)![1]!] : []),
+        "--",
         pattern,
         cwd,
       ];

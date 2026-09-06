@@ -24,6 +24,7 @@ function looksBinary(text: string): boolean {
 
 export const readFileTool: Tool = {
   name: "read_file",
+  readOnly: true,
   description:
     "Read a text file. Use offset (1-based line number) and limit (number of lines) to read large files in windows. Output is line-numbered.",
   inputSchema: {
@@ -31,7 +32,7 @@ export const readFileTool: Tool = {
     properties: {
       path: { type: "string", description: "Path to the file, absolute or relative to the working directory." },
       offset: { type: "integer", description: "1-based starting line. Default 1." },
-      limit: { type: "integer", description: "Max lines to return. Default: whole file." },
+      limit: { type: "integer", description: "Max lines to return. Default 400." },
     },
     required: ["path"],
   },
@@ -43,7 +44,7 @@ export const readFileTool: Tool = {
     if (st.isDirectory()) throw new Error(`${prettyPath(p, ctx.cwd)} is a directory — use list_directory instead.`);
     if (st.size > MAX_READ_BYTES) {
       throw new Error(
-        `File is ${Math.round(st.size / 1024 / 1024)} MB — too large to read whole. Use offset/limit to page through it.`,
+        `File is ${Math.round(st.size / 1024 / 1024)} MB — too large for the text reader. Use a targeted shell command to inspect it.`,
       );
     }
     const text = readFileSync(p, "utf8");
@@ -51,7 +52,7 @@ export const readFileTool: Tool = {
 
     const lines = text.split("\n");
     const start = args.offset ? Math.max(1, Number(args.offset)) : 1;
-    const end = args.limit ? Math.min(lines.length, start + Number(args.limit) - 1) : lines.length;
+    const end = Math.min(lines.length, start + Number(args.limit ?? 400) - 1);
     const body = lines
       .slice(start - 1, end)
       .map((line, i) => `${String(start + i).padStart(5)} | ${line}`)
@@ -117,7 +118,7 @@ export const editFileTool: Tool = {
       if (hit === -1) break;
       count++;
       if (idx === -1) idx = hit;
-      from = hit + oldString.length;
+      from = hit + 1;
     }
 
     if (count === 0) {
@@ -140,6 +141,7 @@ export const editFileTool: Tool = {
 
 export const listDirectoryTool: Tool = {
   name: "list_directory",
+  readOnly: true,
   description: "List the files and subdirectories in a directory. Directories are suffixed with '/'.",
   inputSchema: {
     type: "object",
@@ -220,28 +222,21 @@ export function globToRegExp(glob: string): RegExp {
 
 const SKIP_DIRS = new Set(["node_modules", ".git", "dist", ".next", "target", "vendor", "__pycache__"]);
 
-function walkFiles(dir: string, out: string[], depth: number): void {
-  if (depth > 12) return;
+function* walkFiles(dir: string, depth: number): Generator<string> {
+  if (depth > 30) return;
   let entries: Dirent[];
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
+  try { entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name)); }
+  catch { return; }
   for (const e of entries) {
-    if (out.length >= MAX_GLOB_MATCHES) return;
-    if (e.name.startsWith(".")) continue; // skip hidden
-    if (e.isDirectory()) {
-      if (SKIP_DIRS.has(e.name)) continue;
-      walkFiles(resolve(dir, e.name), out, depth + 1);
-    } else if (e.isFile()) {
-      out.push(resolve(dir, e.name));
-    }
+    if (e.name.startsWith(".")) continue;
+    if (e.isDirectory() && !SKIP_DIRS.has(e.name)) yield* walkFiles(resolve(dir, e.name), depth + 1);
+    else if (e.isFile()) yield resolve(dir, e.name);
   }
 }
 
 export const globTool: Tool = {
   name: "glob",
+  readOnly: true,
   description:
     "Find files matching a glob pattern, e.g. \"src/**/*.ts\" or \"*.json\". Skips node_modules, .git, and hidden files by default.",
   inputSchema: {
@@ -257,28 +252,23 @@ export const globTool: Tool = {
     const pattern = String(args.pattern ?? "");
     if (!pattern) return "pattern is required.";
     const cwd = args.cwd ? resolvePath(args.cwd, ctx.cwd) : ctx.cwd;
-    const staticPrefix = pattern.slice(0, pattern.indexOf("*"));
-    const prefix = staticPrefix.split(/[\\/]/).slice(0, -1).join("/") || ".";
-    const searchRoot = resolveProjectPath(prefix, cwd);
-    if (!statSync(searchRoot, { throwIfNoEntry: false })?.isDirectory()) {
-      return `No matches for ${pattern}`;
-    }
-
-    const all: string[] = [];
-    walkFiles(searchRoot, all, 0);
     const rx = globToRegExp(pattern.replace(/\\/g, "/"));
-    const matches = all
-      .map((f) => relative(cwd, f).replace(/\\/g, "/"))
-      .filter((f) => rx.test(f))
-      .slice(0, MAX_GLOB_MATCHES);
-
+    const matches: string[] = [];
+    let truncated = false;
+    for (const file of walkFiles(cwd, 0)) {
+      const name = relative(cwd, file).replace(/\\/g, "/");
+      if (!rx.test(name)) continue;
+      if (matches.length === MAX_GLOB_MATCHES) { truncated = true; break; }
+      matches.push(name);
+    }
     if (!matches.length) return `No matches for ${pattern}`;
-    return `${matches.length} match${matches.length === 1 ? "" : "es"} for ${pattern}:\n${matches.join("\n")}`;
+    return `${matches.length} match${matches.length === 1 ? "" : "es"} for ${pattern}:\n${matches.join("\n")}${truncated ? "\n... More matches exist; narrow the pattern." : ""}`;
   },
 };
 
 export const finishTool: Tool = {
   name: "finish",
+  readOnly: true,
   description:
     "Signal that the task is complete. Call this with a short summary of what was done instead of answering in chat text.",
   inputSchema: {

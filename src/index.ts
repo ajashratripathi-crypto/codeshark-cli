@@ -16,6 +16,7 @@ import { errorMessage, ToolCall } from "./provider/types.js";
 import { launchKeysPage } from "./keysPage.js";
 import { extractFolderArg, openProjectFolder, requireProjectFolder } from "./project.js";
 import { installLatestVersion, isNewerVersion, latestPublishedVersion } from "./update.js";
+import { checkModelAvailability, modelAvailabilitySnapshot } from "./modelAvailability.js";
 
 const require = createRequire(import.meta.url);
 const VERSION = (require("../package.json") as { version: string }).version;
@@ -79,6 +80,7 @@ function isTTY(): boolean {
 
 async function runOneShot(prompt: string): Promise<void> {
   const cfg = loadConfig();
+  await checkModelAvailability(cfg);
   const cwd = process.cwd();
   const registry = createRegistry();
   const clients = resolveClients(cfg, (m) => console.error(dim(m)));
@@ -173,6 +175,7 @@ async function main(): Promise<void> {
     }
     case "model": {
       // `codeshark model` lists the catalog; `codeshark model <name>` switches.
+      await checkModelAvailability(loadConfig());
       if (rest.length) {
         switchModel(rest.join(" "));
         return;
@@ -225,10 +228,13 @@ async function main(): Promise<void> {
           process.env.NVIDIA_API_KEY ||
           process.env.GEMINI_API_KEY,
       );
-    if (!hasProviderSetup) {
+    const setupCompleted = cfg.setupCompleted ?? hasProviderSetup;
+    if (!setupCompleted) {
       const rl = createInterface({ input, output });
       await runSetupFlow(cfg, rl, { title: "Welcome to CodeShark" });
       rl.close();
+      cfg.setupCompleted = true;
+      saveConfig(cfg);
       console.log("");
     }
     if (process.env.CODESHARK_NO_UPDATE === undefined) {
@@ -247,6 +253,7 @@ async function main(): Promise<void> {
         }
       }
     }
+    await checkModelAvailability(loadConfig());
     // The REPL prints the input instructions once after the banner. Keeping
     // them out of the banner avoids the duplicated startup line. The loading
     // screen types itself out with a spinner, then hands off to the REPL.
@@ -256,6 +263,14 @@ async function main(): Promise<void> {
       "Loading model catalog",
       "Starting the agent",
     ]);
+    console.log(dim("  Model health"));
+    for (const { model, status, reason } of modelAvailabilitySnapshot()) {
+      if (status === "available") {
+        console.log(`    ${hex("#4ade80", "✓ Available")}  ${model.label}`);
+      } else {
+        console.log(`    ${hex("#f87171", "✗ Unavailable")}  ${model.label}${reason ? dim(` — ${reason}`) : ""}`);
+      }
+    }
     console.log("");
   }
   const registry = createRegistry();

@@ -1,7 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync, renameSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { DEFAULT_MODEL_ID, findModel, toApiSlug } from "./models.js";
+import { DEFAULT_MODEL_ID, findModel, isRetiredModel, toApiSlug } from "./models.js";
 
 export type ProviderName = "gateway" | "openrouter" | "nvidia" | "gemini" | "ollama" | "unorouter";
 
@@ -39,12 +40,14 @@ export interface CodeSharkConfig {
   maxIterations?: number;
   /** Set to true after the user accepts the Terms of Service once. */
   termsAccepted?: boolean;
+  /** Set after the first-run provider setup has been shown once. */
+  setupCompleted?: boolean;
 }
 
 export const DEFAULT_GATEWAY_URL = "https://codeshark-gateway.ajrgp.workers.dev";
 
 /** Kept for backwards compatibility; the catalog in src/models.ts is canonical. */
-export const DEFAULT_MODEL = "glm-5.3-flash-thinking:free";
+export const DEFAULT_MODEL = "glm-5.3-flash-think-search:free";
 /** Fallback slug for OpenRouter when the active model lives on another provider. */
 export const DEFAULT_OPENROUTER_MODEL = "z-ai/glm-5.2:free";
 export const DEFAULT_GEMINI_MODEL = "gemini-2.5-pro";
@@ -61,7 +64,15 @@ export function loadConfig(): CodeSharkConfig {
   try {
     if (!existsSync(p)) return {};
     const raw = readFileSync(p, "utf8");
-    return JSON.parse(raw) as CodeSharkConfig;
+    const parsed: unknown = JSON.parse(raw.replace(/^\uFEFF/, ""));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const cfg = parsed as CodeSharkConfig;
+    if (cfg.maxIterations !== undefined && (!Number.isSafeInteger(cfg.maxIterations) || cfg.maxIterations < 1)) delete cfg.maxIterations;
+    const strings = ["model", "systemPrompt", "openrouterApiKey", "openrouterBaseUrl", "unorouterApiKey", "unorouterBaseUrl", "nvidiaApiKey", "nvidiaBaseUrl", "geminiApiKey", "geminiBaseUrl", "gatewayUrl", "gatewayKey", "ollamaBaseUrl", "ollamaModel"] as const;
+    for (const key of strings) if (cfg[key] !== undefined && typeof cfg[key] !== "string") delete cfg[key];
+    for (const key of ["termsAccepted", "setupCompleted"] as const) if (typeof cfg[key] !== "boolean") delete cfg[key];
+    if (cfg.provider && !["gateway", "openrouter", "nvidia", "gemini", "ollama", "unorouter"].includes(cfg.provider)) delete cfg.provider;
+    return cfg;
   } catch {
     return {};
   }
@@ -71,7 +82,13 @@ export function loadConfig(): CodeSharkConfig {
 export function saveConfig(cfg: CodeSharkConfig): void {
   const p = configPath();
   mkdirSync(dirname(p), { recursive: true });
-  writeFileSync(p, JSON.stringify(cfg, null, 2) + "\n", "utf8");
+  const temporary = p + "." + randomUUID() + ".tmp";
+  try {
+    writeFileSync(temporary, JSON.stringify(cfg, null, 2) + "\n", { encoding: "utf8", mode: 0o600, flag: "wx" });
+    renameSync(temporary, p);
+  } finally {
+    try { unlinkSync(temporary); } catch { /* Already renamed, or never created. */ }
+  }
   try {
     chmodSync(p, 0o600);
   } catch {
@@ -84,8 +101,8 @@ export function saveConfig(cfg: CodeSharkConfig): void {
  * Falls back sensibly when config/env only name a provider.
  */
 export function activeModelId(cfg: CodeSharkConfig): string {
-  if (process.env.CODESHARK_MODEL) return process.env.CODESHARK_MODEL;
-  if (cfg.model) return cfg.model;
+  if (process.env.CODESHARK_MODEL && !isRetiredModel(process.env.CODESHARK_MODEL)) return process.env.CODESHARK_MODEL;
+  if (cfg.model && !isRetiredModel(cfg.model)) return cfg.model;
   return DEFAULT_MODEL_ID;
 }
 
@@ -111,7 +128,8 @@ export function activeProvider(cfg: CodeSharkConfig): ProviderName {
 /** Effective model for a provider, honoring env overrides and config. */
 export function effectiveModel(cfg: CodeSharkConfig, provider: ProviderName): string {
   if (provider === "gemini") {
-    const configured = cfg.model && !findModel(cfg.model) ? cfg.model : undefined;
+    const selected = findModel(activeModelId(cfg));
+    const configured = selected?.provider === "gemini" ? selected.model : cfg.model && !selected ? cfg.model : undefined;
     return process.env.GEMINI_MODEL ?? configured ?? DEFAULT_GEMINI_MODEL;
   }
   if (provider === "ollama") return process.env.CODESHARK_OLLAMA_MODEL ?? cfg.ollamaModel ?? DEFAULT_OLLAMA_MODEL;

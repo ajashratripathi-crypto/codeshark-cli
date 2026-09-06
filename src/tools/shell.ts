@@ -72,7 +72,7 @@ export const runCommandTool: Tool = {
     const command = String(args.command ?? "").trim();
     if (!command) return "No command provided.";
     const cwd = args.cwd ? resolveProjectPath(String(args.cwd), ctx.cwd) : ctx.cwd;
-    const timeoutMs = args.timeoutMs ? Math.max(1000, Number(args.timeoutMs)) : DEFAULT_TIMEOUT_MS;
+    const timeoutMs = args.timeoutMs ? Math.min(300_000, Math.max(1000, Number(args.timeoutMs))) : DEFAULT_TIMEOUT_MS;
 
     const danger = isDangerousCommand(command);
     if (danger && !process.env.CODESHARK_ALLOW_DANGEROUS) {
@@ -82,27 +82,48 @@ export const runCommandTool: Tool = {
     }
 
     const shell = pickShell();
-    return new Promise<string>((resolvePromise) => {
-      const child = spawn(shell.cmd, shell.args(command), { cwd, stdio: ["ignore", "pipe", "pipe"] });
+    ctx.signal?.throwIfAborted();
+    return new Promise<string>((resolvePromise, reject) => {
+      const child = spawn(shell.cmd, shell.args(command), { cwd, stdio: ["ignore", "pipe", "pipe"], windowsHide: true, detached: process.platform !== "win32" });
       let stdout = "";
       let stderr = "";
       let timedOut = false;
-      child.stdout.on("data", (d) => (stdout += d));
-      child.stderr.on("data", (d) => (stderr += d));
+      let stdoutChars = 0;
+      let stderrChars = 0;
+      child.stdout.setEncoding("utf8");
+      child.stderr.setEncoding("utf8");
+      child.stdout.on("data", (d: string) => { stdoutChars += d.length; stdout += d.slice(0, Math.max(0, MAX_OUTPUT_CHARS - stdout.length)); });
+      child.stderr.on("data", (d: string) => { stderrChars += d.length; stderr += d.slice(0, Math.max(0, MAX_OUTPUT_CHARS - stderr.length)); });
+      const stop = () => {
+        if (!child.pid) return;
+        if (process.platform === "win32") {
+          const killer = spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
+          killer.on("error", () => child.kill());
+        } else {
+          try { process.kill(-child.pid, "SIGKILL"); } catch { child.kill("SIGKILL"); }
+        }
+      };
+      ctx.signal?.addEventListener("abort", stop, { once: true });
       const timer = setTimeout(() => {
         timedOut = true;
-        child.kill("SIGKILL");
+        stop();
       }, timeoutMs);
       child.on("close", (code) => {
         clearTimeout(timer);
+        ctx.signal?.removeEventListener("abort", stop);
         const parts = [`$ ${command}`, `exit code: ${timedOut ? `timed out after ${timeoutMs}ms` : code}`];
         if (stdout.trim()) parts.push(`stdout:\n${truncate(stdout).trimEnd()}`);
         if (stderr.trim()) parts.push(`stderr:\n${truncate(stderr).trimEnd()}`);
-        resolvePromise(parts.join("\n"));
+        if (stdoutChars > stdout.length || stderrChars > stderr.length) parts.push("[Output truncated; use a narrower command.]");
+        const result = parts.join("\n");
+        if (ctx.signal?.aborted) reject(ctx.signal.reason);
+        else if (timedOut || code !== 0) reject(new Error(result));
+        else resolvePromise(result);
       });
       child.on("error", (e) => {
         clearTimeout(timer);
-        resolvePromise(`Failed to spawn shell: ${e.message}`);
+        ctx.signal?.removeEventListener("abort", stop);
+        reject(new Error(`Failed to spawn shell: ${e.message}`));
       });
     });
   },

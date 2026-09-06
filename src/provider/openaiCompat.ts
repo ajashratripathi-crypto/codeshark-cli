@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import {
   ChatClient,
   ChatMessage,
@@ -18,6 +19,7 @@ export interface OpenAICompatOptions {
   fetchImpl?: typeof fetch;
   /** Delays (ms) to wait between retries when the API answers 429. Default [800, 1600]. */
   rateLimitRetryDelays?: number[];
+  timeoutMs?: number;
 }
 
 function toOpenAIMessages(messages: ChatMessage[]): unknown[] {
@@ -65,7 +67,7 @@ function safeParseArgs(raw: string): Record<string, unknown> {
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
   } catch {
     return {};
   }
@@ -82,61 +84,78 @@ export function createOpenAICompatClient(opts: OpenAICompatOptions): ChatClient 
     isFree: opts.isFree ?? true,
 
     async chat(messages, tools, events, signal): Promise<ChatMessage> {
-      const body: Record<string, unknown> = {
-        model: opts.model,
-        messages: toOpenAIMessages(messages),
-        stream: true,
-        temperature: 0.3,
-      };
-      if (tools.length) body.tools = toOpenAITools(tools);
+      signal?.throwIfAborted();
+      const controller = new AbortController();
+      const abort = () => controller.abort(signal?.reason);
+      signal?.addEventListener("abort", abort, { once: true });
+      const timeout = setTimeout(() => controller.abort(new Error("Provider request timed out.")), opts.timeoutMs ?? 120_000);
+      try {
+        const body: Record<string, unknown> = {
+          model: opts.model,
+          messages: toOpenAIMessages(messages),
+          stream: true,
+          temperature: 0.3,
+        };
+        if (tools.length) body.tools = toOpenAITools(tools);
 
-      const headers: Record<string, string> = {
-        "content-type": "application/json",
-        ...(opts.apiKey ? { authorization: `Bearer ${opts.apiKey}` } : {}),
-        ...opts.extraHeaders,
-      };
+        const headers: Record<string, string> = {
+          "content-type": "application/json",
+          ...(opts.apiKey ? { authorization: `Bearer ${opts.apiKey}` } : {}),
+          ...opts.extraHeaders,
+        };
 
-      // Wait out rate limits with backoff before surfacing a 429 — the
-      // queue lives client-side too, so shared gateway lanes feel smooth.
-      const retryDelays = opts.rateLimitRetryDelays ?? [800, 1600];
-      let res: Response;
-      for (let attempt = 0; ; attempt++) {
-        let candidate: Response;
-        try {
-          candidate = await fetchImpl(endpoint, {
-            method: "POST",
-            headers,
-            body: JSON.stringify(body),
-            signal,
-          });
-        } catch (e) {
-          throw new ProviderError(
-            `Cannot reach ${opts.provider} at ${base}: ${errorMessage(e)}`,
-            "network",
-          );
+        // Wait out rate limits with backoff before surfacing a 429 — the
+        // queue lives client-side too, so shared gateway lanes feel smooth.
+        const retryDelays = opts.rateLimitRetryDelays ?? [800, 1600];
+        let res: Response;
+        for (let attempt = 0; ; attempt++) {
+          let candidate: Response;
+          try {
+            candidate = await fetchImpl(endpoint, {
+              method: "POST",
+              headers,
+              body: JSON.stringify(body),
+              signal: controller.signal,
+            });
+          } catch (e) {
+            throw new ProviderError(
+              `Cannot reach ${opts.provider} at ${base}: ${errorMessage(e)}`,
+              "network",
+            );
+          }
+          if (candidate.status !== 429 || attempt >= retryDelays.length) {
+            res = candidate;
+            break;
+          }
+          await candidate.body?.cancel();
+          const retryAfter = candidate.headers.get("retry-after");
+          const seconds = retryAfter === null ? NaN : Number(retryAfter);
+          const suggested = Number.isFinite(seconds) ? seconds * 1000 : retryAfter ? Date.parse(retryAfter) - Date.now() : NaN;
+          const wait = Number.isFinite(suggested) ? Math.min(30_000, Math.max(0, suggested)) : retryDelays[attempt]!;
+          await delay(wait, undefined, { signal: controller.signal });
         }
-        if (candidate.status !== 429 || attempt >= retryDelays.length) {
-          res = candidate;
-          break;
-        }
-        await new Promise((r) => setTimeout(r, retryDelays[attempt]!));
-      }
 
-      if (!res.ok) {
-        let detail = "";
-        try {
-          const j = (await res.json()) as { error?: { message?: string } };
-          detail = j.error?.message ?? JSON.stringify(j).slice(0, 300);
-        } catch {
-          detail = (await res.text().catch(() => "")).slice(0, 300);
+        if (!res.ok) {
+          const raw = await res.text();
+          let detail = raw.slice(0, 300);
+          try {
+            const data = JSON.parse(raw) as { error?: { message?: string } };
+            if (typeof data?.error?.message === "string") detail = data.error.message.slice(0, 300);
+          } catch { /* Preserve plain-text errors from proxies. */ }
+          throw classifyStatus(res.status, opts.provider, detail);
         }
-        throw classifyStatus(res.status, opts.provider, detail);
-      }
-      if (!res.body) {
-        throw new ProviderError(`${opts.provider}: empty response body`, "unknown");
-      }
+        if (!res.body) {
+          throw new ProviderError(`${opts.provider}: empty response body`, "unknown");
+        }
 
-      return parseOpenAIStream(res.body, opts.provider, events);
+        return await parseOpenAIStream(res.body, opts.provider, events);
+      } catch (error) {
+        if (controller.signal.aborted) throw controller.signal.reason;
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+        signal?.removeEventListener("abort", abort);
+      }
     },
   };
 }
@@ -150,16 +169,19 @@ async function parseOpenAIStream(
   const decoder = new TextDecoder();
   let buffer = "";
   let content = "";
+  let completed = false;
+  let doneMarker = false;
   const pending = new Map<number, AccumulatedToolCall>();
   const finalized = new Map<number, AccumulatedToolCall>();
 
   const handleData = (data: string): void => {
-    if (!data || data === "[DONE]") return;
+    if (!data) return;
+    if (data === "[DONE]") { doneMarker = true; completed = true; return; }
     let json: Record<string, unknown>;
     try {
       json = JSON.parse(data) as Record<string, unknown>;
     } catch {
-      return;
+      throw new ProviderError(provider + ": malformed stream event", "network");
     }
     if (json.error) {
       const err = json.error as { message?: string; code?: unknown };
@@ -188,6 +210,8 @@ async function parseOpenAIStream(
       }
     }
     if (choice.finish_reason) {
+      completed = true;
+      if (choice.finish_reason === "length") throw new ProviderError(provider + ": response exceeded the token limit; narrow the task.", "model");
       for (const [idx, tc] of pending) finalized.set(idx, tc);
       pending.clear();
     }
@@ -201,25 +225,33 @@ async function parseOpenAIStream(
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
       for (const line of lines) {
+        if (doneMarker) break;
         const trimmed = line.trim();
         if (trimmed.startsWith("data:")) handleData(trimmed.slice(5).trim());
       }
+      if (doneMarker) break;
     }
-    if (buffer.trim()) {
+    buffer += decoder.decode();
+    if (!doneMarker && buffer.trim()) {
       const trimmed = buffer.trim();
       if (trimmed.startsWith("data:")) handleData(trimmed.slice(5).trim());
     }
   } catch (e) {
     if (e instanceof ProviderError) throw e;
     throw new ProviderError(`${provider}: stream interrupted: ${errorMessage(e)}`, "network");
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
   }
 
+  if (!completed) throw new ProviderError(provider + ": stream ended before completion; please retry.", "network");
+  for (const [index, call] of pending) finalized.set(index, call);
   const toolCalls: ToolCall[] = [...finalized.values()]
     .filter((c) => c.name)
     .map((c) => ({
       id: c.id || `call_${Math.random().toString(36).slice(2, 10)}`,
       name: c.name,
-      args: safeParseArgs(c.args),
+      args: parseToolArgs(c.args, provider),
     }));
 
   return {
@@ -227,6 +259,14 @@ async function parseOpenAIStream(
     content: content.trim(),
     toolCalls: toolCalls.length ? toolCalls : undefined,
   };
+}
+
+function parseToolArgs(raw: string, provider: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(raw || "{}");
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+  } catch { /* Reject partial tool arguments instead of executing an empty object. */ }
+  throw new ProviderError(provider + ": invalid tool arguments; no action was executed.", "model");
 }
 
 /** Exported for tests. */

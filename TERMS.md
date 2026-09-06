@@ -63,8 +63,8 @@ own terms. You are responsible for protecting your own keys.
 
 ## 7. Third-party services
 
-CodeShark may connect to third-party services, including UnoRouter, OpenRouter,
-NVIDIA, Google, Cloudflare, and Ollama. Those services have separate terms,
+CodeShark may connect to third-party services, including model providers,
+Cloudflare, Google, and Ollama. Those services have separate terms,
 privacy policies, availability limits, model restrictions, and data practices.
 You are responsible for complying with the terms that apply to the provider
 and model you select. CodeShark does not represent or endorse those providers.
