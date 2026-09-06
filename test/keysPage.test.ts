@@ -73,9 +73,9 @@ test("key vault requires a password and never embeds saved secrets in HTML", asy
 
     const csrf = /name="csrf" value="([^"]+)"/.exec(unlockedHtml)?.[1];
     assert.ok(csrf);
-    const saved = await form(url, "/save", { csrf, nvidiaApiKey: "nvapi-new-key" }, cookie);
+    const saved = await form(url, "/save", { csrf, geminiApiKey: "AIza-new-key" }, cookie);
     assert.equal(saved.status, 303);
-    assert.equal(loadConfig().nvidiaApiKey, "nvapi-new-key");
+    assert.equal(loadConfig().geminiApiKey, "AIza-new-key");
     assert.equal(loadConfig().openrouterApiKey, "sk-or-v1-super-secret-value");
   } finally {
     closeKeysPage();

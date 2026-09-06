@@ -1,7 +1,7 @@
 {
   "name": "codeshark-cli",
-  "version": "0.1.7",
-  "description": "An open-source terminal coding agent. Eight model choices, project tools, and approval before every tool action.",
+  "version": "0.1.8",
+  "description": "An open-source terminal coding agent. Four model choices, project tools, and approval before every tool action.",
   "type": "module",
   "bin": {
     "codeshark": "dist/index.js"

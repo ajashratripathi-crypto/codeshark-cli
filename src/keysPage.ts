@@ -137,11 +137,11 @@ function loginPage(message = ""): string {
 
 function vaultPage(session: Session): string {
   const cfg = loadConfig();
-  const secretInput = (id: "openrouterApiKey" | "unorouterApiKey" | "nvidiaApiKey" | "geminiApiKey", label: string, placeholder: string): string =>
+  const secretInput = (id: "openrouterApiKey" | "unorouterApiKey" | "geminiApiKey", label: string, placeholder: string): string =>
     `<label for="${id}">${label}</label><input id="${id}" name="${id}" type="password" value="" placeholder="${placeholder}" autocomplete="new-password" spellcheck="false"><label class="small"><input type="checkbox" name="clear_${id}" value="1" style="width:auto;margin-right:8px"> Clear this saved key</label>`;
   return page(
     "API keys",
-    `<h1>CodeShark key vault</h1><p>Unlocked locally. Values are saved to <code>${htmlEscape(configPath())}</code>. Keep this page on your own computer.</p><div class="card"><form method="post" action="/save"><input type="hidden" name="csrf" value="${htmlEscape(session.csrf)}"><h2>Provider keys</h2>${secretInput("unorouterApiKey", "Primary model API key", "paste a replacement (shown once)…")}${secretInput("openrouterApiKey", "OpenRouter API key", "paste a replacement: sk-or-v1-…")}${secretInput("nvidiaApiKey", "NVIDIA NIM API key", "paste a replacement: nvapi-…")}${secretInput("geminiApiKey", "Gemini API key", "paste a replacement: AIza…")}<p class="small">Saved keys are never placed in this page's HTML. Leave a field blank to keep its current value, or check Clear to remove it.</p><button>Save keys</button></form></div><div class="card"><h2>Current status</h2><p class="key">Primary model API: ${htmlEscape(mask(cfg.unorouterApiKey) || "not set")}</p><p class="key">OpenRouter: ${htmlEscape(mask(cfg.openrouterApiKey) || "not set")}</p><p class="key">NVIDIA: ${htmlEscape(mask(cfg.nvidiaApiKey) || "not set")}</p><p class="key">Gemini: ${htmlEscape(mask(cfg.geminiApiKey) || "not set")}</p><p class="hint">Your keys are never printed to the terminal by CodeShark.</p><form method="post" action="/logout"><input type="hidden" name="csrf" value="${htmlEscape(session.csrf)}"><button class="danger">Lock vault</button></form></div>`,
+    `<h1>CodeShark key vault</h1><p>Unlocked locally. Values are saved to <code>${htmlEscape(configPath())}</code>. Keep this page on your own computer.</p><div class="card"><form method="post" action="/save"><input type="hidden" name="csrf" value="${htmlEscape(session.csrf)}"><h2>Provider keys</h2>${secretInput("unorouterApiKey", "Primary model API key", "paste a replacement (shown once)…")}${secretInput("openrouterApiKey", "OpenRouter API key", "paste a replacement: sk-or-v1-…")}${secretInput("geminiApiKey", "Gemini API key", "paste a replacement: AIza…")}<p class="small">Saved keys are never placed in this page's HTML. Leave a field blank to keep its current value, or check Clear to remove it.</p><button>Save keys</button></form></div><div class="card"><h2>Current status</h2><p class="key">Primary model API: ${htmlEscape(mask(cfg.unorouterApiKey) || "not set")}</p><p class="key">OpenRouter: ${htmlEscape(mask(cfg.openrouterApiKey) || "not set")}</p><p class="key">Gemini: ${htmlEscape(mask(cfg.geminiApiKey) || "not set")}</p><p class="hint">Your keys are never printed to the terminal by CodeShark.</p><form method="post" action="/logout"><input type="hidden" name="csrf" value="${htmlEscape(session.csrf)}"><button class="danger">Lock vault</button></form></div>`,
   );
 }
 
@@ -207,7 +207,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
     const cfg = loadConfig();
-    for (const field of ["unorouterApiKey", "openrouterApiKey", "nvidiaApiKey", "geminiApiKey"] as const) {
+    for (const field of ["unorouterApiKey", "openrouterApiKey", "geminiApiKey"] as const) {
       const value = body[field]?.trim();
       if (body[`clear_${field}`] === "1") delete cfg[field];
       else if (value) cfg[field] = value;

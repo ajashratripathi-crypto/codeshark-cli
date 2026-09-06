@@ -5,7 +5,7 @@ export type ModelAvailability = "checking" | "available" | "unavailable" | "busy
 
 const statuses = new Map<string, ModelAvailability>();
 const reasons = new Map<string, string>();
-const TIMEOUT_MS = 15_000;
+const TIMEOUT_MS = 30_000; // slow-but-alive lanes are common on free tiers — don't read slowness as death
 /** Match the gateway's per-IP inflight cap so probes never queue behind themselves. */
 const MAX_CONCURRENT_CHECKS = 2;
 

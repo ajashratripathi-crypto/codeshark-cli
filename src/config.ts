@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync, renameSy
 import { dirname, join } from "node:path";
 import { DEFAULT_MODEL_ID, findModel, isRetiredModel, toApiSlug } from "./models.js";
 
-export type ProviderName = "gateway" | "openrouter" | "nvidia" | "gemini" | "ollama" | "unorouter";
+export type ProviderName = "gateway" | "openrouter" | "gemini" | "ollama" | "unorouter";
 
 /** User configuration, stored at ~/.codeshark.json (overridable via CODESHARK_CONFIG). */
 export interface CodeSharkConfig {
@@ -22,9 +22,6 @@ export interface CodeSharkConfig {
   unorouterApiKey?: string;
   /** Optional custom base URL for the UnoRouter-compatible endpoint. */
   unorouterBaseUrl?: string;
-  nvidiaApiKey?: string;
-  /** Optional custom base URL for the NVIDIA NIM endpoint. */
-  nvidiaBaseUrl?: string;
   geminiApiKey?: string;
   /** Optional custom base URL for the Gemini API. */
   geminiBaseUrl?: string;
@@ -68,10 +65,10 @@ export function loadConfig(): CodeSharkConfig {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
     const cfg = parsed as CodeSharkConfig;
     if (cfg.maxIterations !== undefined && (!Number.isSafeInteger(cfg.maxIterations) || cfg.maxIterations < 1)) delete cfg.maxIterations;
-    const strings = ["model", "systemPrompt", "openrouterApiKey", "openrouterBaseUrl", "unorouterApiKey", "unorouterBaseUrl", "nvidiaApiKey", "nvidiaBaseUrl", "geminiApiKey", "geminiBaseUrl", "gatewayUrl", "gatewayKey", "ollamaBaseUrl", "ollamaModel"] as const;
+    const strings = ["model", "systemPrompt", "openrouterApiKey", "openrouterBaseUrl", "unorouterApiKey", "unorouterBaseUrl", "geminiApiKey", "geminiBaseUrl", "gatewayUrl", "gatewayKey", "ollamaBaseUrl", "ollamaModel"] as const;
     for (const key of strings) if (cfg[key] !== undefined && typeof cfg[key] !== "string") delete cfg[key];
     for (const key of ["termsAccepted", "setupCompleted"] as const) if (typeof cfg[key] !== "boolean") delete cfg[key];
-    if (cfg.provider && !["gateway", "openrouter", "nvidia", "gemini", "ollama", "unorouter"].includes(cfg.provider)) delete cfg.provider;
+    if (cfg.provider && !["gateway", "openrouter", "gemini", "ollama", "unorouter"].includes(cfg.provider)) delete cfg.provider;
     // Self-heal: drop a saved model that a provider retired so the current default applies.
     if (cfg.model && isRetiredModel(cfg.model)) delete cfg.model;
     return cfg;
@@ -123,7 +120,6 @@ export function activeProvider(cfg: CodeSharkConfig): ProviderName {
   // Slug heuristics for raw slugs not in the catalog.
   if (m.startsWith("unorouter/")) return "unorouter";
   if (m.endsWith(":free") || m.startsWith("openrouter/")) return "openrouter";
-  if (m.startsWith("moonshotai/") || m.startsWith("deepseek-ai/")) return "nvidia";
   return "gateway";
 }
 
@@ -143,11 +139,6 @@ export function effectiveModel(cfg: CodeSharkConfig, provider: ProviderName): st
   if (provider === "gateway" && (selected?.provider === "openrouter" || selected?.provider === "unorouter")) return selected.model;
   if (provider === "unorouter") return process.env.UNOROUTER_MODEL ?? DEFAULT_MODEL;
   if (provider === "openrouter") return DEFAULT_OPENROUTER_MODEL;
-  if (provider === "nvidia") {
-    const raw = activeModelId(cfg);
-    if (raw.startsWith("moonshotai/") || raw.startsWith("deepseek-ai/")) return raw;
-    return "moonshotai/kimi-k3";
-  }
   return DEFAULT_MODEL;
 }
 
@@ -157,8 +148,6 @@ export function envApiKey(provider: ProviderName): string | undefined {
       return process.env.OPENROUTER_API_KEY;
     case "unorouter":
       return process.env.UNOROUTER_API_KEY;
-    case "nvidia":
-      return process.env.NVIDIA_API_KEY ?? process.env.NVIDIA_NIM_API_KEY;
     case "gemini":
       return process.env.GEMINI_API_KEY;
     default:
@@ -169,7 +158,7 @@ export function envApiKey(provider: ProviderName): string | undefined {
 export function hasApiKey(cfg: CodeSharkConfig, provider: ProviderName): boolean {
   if (provider === "gateway") return true;
   if (provider === "ollama") return true;
-  return Boolean(cfg[`${provider}ApiKey` as "openrouterApiKey" | "unorouterApiKey" | "nvidiaApiKey" | "geminiApiKey"]) || Boolean(envApiKey(provider));
+  return Boolean(cfg[`${provider}ApiKey` as "openrouterApiKey" | "unorouterApiKey" | "geminiApiKey"]) || Boolean(envApiKey(provider));
 }
 
 /** Short human label for the banner's model line — just the model, no provider branding. */

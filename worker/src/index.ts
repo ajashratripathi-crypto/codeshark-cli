@@ -8,7 +8,9 @@
  * Failover chain (tries in order until one answers):
  *   1. UnoRouter    — all catalog models on `:free` lanes (primary)
  *   2. OpenRouter   — best-effort `:free` aliases (or `openrouter/free`)
- *   3. NVIDIA NIM   — free NIM endpoints for open-weight models
+ *
+ * (NVIDIA NIM was removed as a lane: NVIDIA's free NIM terms do not permit
+ * commercial use, and CodeShark is an MIT-licensed product.)
  *
  * When a provider rate-limits (429), the gateway waits and retries once, then
  * hands off to the next provider — users experience a queue, not errors.
@@ -17,7 +19,6 @@
  * Secrets (set with `npx wrangler secret put`):
  *   UNOROUTER_API_KEY   — free UnoRouter key (primary; no credit card needed).
  *   OPENROUTER_API_KEY  — free OpenRouter key (fallback).
- *   NVIDIA_API_KEY      — free NVIDIA NIM key, `nvapi-…` (last resort).
  *   GATEWAY_SHARED_SECRET — optional; if set, clients must send it as
  *                         `Authorization: Bearer <secret>`.
  */
@@ -25,13 +26,11 @@
 export interface Env {
   UNOROUTER_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
-  NVIDIA_API_KEY?: string;
   GATEWAY_SHARED_SECRET?: string;
 }
 
 const UNOROUTER_URL = "https://api.unorouter.com/v1/chat/completions";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
 
 /**
  * Best-effort free aliases for the CodeShark catalog on fallback providers.
@@ -40,15 +39,10 @@ const NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
  * OpenRouter's `openrouter/free` meta-slug routes to any available free model.
  */
 const OPENROUTER_ALIASES: Record<string, string> = {
-  "gpt-5.6-sol:free": "openrouter/free",
-  "glm-5.3-flash-thinking:free": "z-ai/glm-5.3-flash-thinking:free",
-  "kimi-k3:free": "moonshotai/kimi-k3:free",
+  "glm-5.3-flash-think-search:free": "openrouter/free",
   "gemini-3.6-flash:free": "google/gemini-3.6-flash:free",
-};
-
-const NVIDIA_ALIASES: Record<string, string> = {
-  "glm-5.3-flash-thinking:free": "zai-org/glm-5.3-flash-thinking",
-  "kimi-k3:free": "moonshotai/kimi-k3",
+  "nemotron-3-ultra-550b-a55b:free": "openrouter/free",
+  "minimax-m2.7:free": "minimax/minimax-m2.7:free",
 };
 
 const CORS_HEADERS: Record<string, string> = {
@@ -149,10 +143,6 @@ function buildChain(model: string, env: Env): Upstream[] {
       extraHeaders: { "HTTP-Referer": "https://github.com/codeshark/codeshark", "X-Title": "CodeShark Gateway" },
     });
   }
-  if (env.NVIDIA_API_KEY) {
-    const alias = NVIDIA_ALIASES[model];
-    if (alias) chain.push({ name: "nvidia", url: NVIDIA_URL, key: env.NVIDIA_API_KEY, model: alias });
-  }
   return chain;
 }
 
@@ -197,7 +187,7 @@ export default {
         service: "codeshark-gateway",
         free: true,
         models: "CodeShark catalog models (:free lanes)",
-        providers: ["unorouter", "openrouter", "nvidia"].filter((p) => {
+        providers: ["unorouter", "openrouter"].filter((p) => {
           const key = env[`${p.toUpperCase()}_API_KEY` as "UNOROUTER_API_KEY"];
           return Boolean(key);
         }),
@@ -252,7 +242,7 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
       {
         error: {
           message:
-            "Gateway is not configured yet (no UNOROUTER_API_KEY, OPENROUTER_API_KEY, or NVIDIA_API_KEY secret). See worker/README.md.",
+            "Gateway is not configured yet (no UNOROUTER_API_KEY or OPENROUTER_API_KEY secret). See worker/README.md.",
           code: 503,
         },
       },

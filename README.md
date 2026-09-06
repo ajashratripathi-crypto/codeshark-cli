@@ -76,7 +76,7 @@ Inside a conversation:
 /quit       End the session
 ```
 
-For example, `/model deepseek-v4-flash` switches to DeepSeek-V4 Flash. Your selection is saved locally.
+For example, `/model glm` switches to GLM 5.3 Flash Think Search. Your selection is saved locally.
 
 ## Models
 
@@ -84,14 +84,10 @@ The catalog is checked at startup, and unavailable models are marked. These cont
 
 | Model | Context | Selection command |
 | --- | --- | --- |
-| Chat-GPT 5.6 Sol | 400K | `/model gpt-5.6-sol` |
-| DeepSeek-V4 Flash | 256K | `/model deepseek-v4-flash` |
-| MiniMax M3 | 128K | `/model minimax-m3` |
-| **GLM 5.3 Flash Think Search — default** | **1M** | `/model glm-5.3-flash-think-search` |
-| Gemini 3.6 Flash | 1M | `/model gemini-3.6-flash` |
-| Sarvam 30B | 128K | `/model sarvam-30b` |
-| GPT-OSS 120B | 128K | `/model gpt-oss-120b` |
-| Nemotron 3 Ultra 550B A55B | 256K | `/model nemotron-3-ultra-550b-a55b` |
+| **GLM 5.3 Flash Think Search — default** | **1M** | `/model glm` |
+| Gemini 3.6 Flash | 1M | `/model gemini-3.6` |
+| Nemotron 3 Ultra 550B A55B | 256K | `/model nemotron` |
+| MiniMax M2.7 | 128K | `/model minimax` |
 
 ## Connection and privacy
 
@@ -122,4 +118,4 @@ npm test
 
 ## Provider details
 
-The current free catalog uses UnoRouter through an OpenAI-compatible connection. Configure your own key with `codeshark setup`. Additional adapters support OpenRouter, NVIDIA NIM, Gemini, and local Ollama.
+The current free catalog uses UnoRouter through an OpenAI-compatible connection. Configure your own key with `codeshark setup`. Additional adapters support OpenRouter, Gemini, and local Ollama.

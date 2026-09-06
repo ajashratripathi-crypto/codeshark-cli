@@ -1,7 +1,6 @@
 import { activeModelId, activeProvider, CodeSharkConfig, envApiKey } from "../config.js";
 import { createGatewayClient } from "./gateway.js";
 import { createGeminiClient } from "./gemini.js";
-import { createNvidiaClient } from "./nvidia.js";
 import { createOllamaClient } from "./ollama.js";
 import { createOpenRouterClient } from "./openrouter.js";
 import { createUnoRouterClient } from "./unorouter.js";
@@ -38,13 +37,6 @@ export function resolveClients(cfg: CodeSharkConfig, debug?: (msg: string) => vo
       else add(createGatewayClient(cfg));
       break;
     }
-    case "nvidia": {
-      const key = cfg.nvidiaApiKey ?? envApiKey("nvidia");
-      // NVIDIA-hosted models can't run through the OpenRouter gateway.
-      if (key) add(createNvidiaClient(cfg, key));
-      else debug?.("NVIDIA model selected but no NVIDIA_API_KEY found — run `codeshark setup`.");
-      break;
-    }
     case "gemini": {
       const key = cfg.geminiApiKey ?? envApiKey("gemini");
       if (key) add(createGeminiClient(cfg, key));
@@ -72,10 +64,6 @@ export function resolveClients(cfg: CodeSharkConfig, debug?: (msg: string) => vo
   if (!has("unorouter")) {
     const key = cfg.unorouterApiKey ?? envApiKey("unorouter");
     if (key) add(createUnoRouterClient(cfg, key));
-  }
-  if (!has("nvidia")) {
-    const key = cfg.nvidiaApiKey ?? envApiKey("nvidia");
-    if (key) add(createNvidiaClient(cfg, key));
   }
   if (!has("gemini")) {
     const key = cfg.geminiApiKey ?? envApiKey("gemini");

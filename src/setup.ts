@@ -5,7 +5,6 @@ import { bold, dim, hex } from "./ansi.js";
 import { CodeSharkConfig, DEFAULT_GEMINI_MODEL, configPath, hasApiKey, loadConfig, saveConfig } from "./config.js";
 import { createUnoRouterClient } from "./provider/unorouter.js";
 import { createGeminiClient } from "./provider/gemini.js";
-import { createNvidiaClient } from "./provider/nvidia.js";
 import { createOpenRouterClient } from "./provider/openrouter.js";
 import { createOllamaClient, ollamaAvailable } from "./provider/ollama.js";
 import { MODELS } from "./models.js";
@@ -148,13 +147,12 @@ export async function runSetupFlow(
 
   // Choice 2 — choose which provider key to configure.
   console.log(bold("  Choose an API provider"));
-  console.log(dim("    [1] Primary model API — eight free catalog models"));
+  console.log(dim("    [1] Primary model API — four free catalog models"));
   console.log(dim("    [2] Gemini API"));
-  console.log(dim("    [3] NVIDIA NIM"));
-  console.log(dim("    [4] OpenRouter"));
-  console.log(dim("    [5] Cancel"));
-  const keyChoice = (await rl.question("  Choose [1-5]: ")).trim();
-  if (keyChoice === "5") return false;
+  console.log(dim("    [3] OpenRouter"));
+  console.log(dim("    [4] Cancel"));
+  const keyChoice = (await rl.question("  Choose [1-4]: ")).trim();
+  if (keyChoice === "4") return false;
 
   if (keyChoice === "2") {
     const gk = await askSecret("  Paste your Gemini API key (Enter to skip): ");
@@ -167,15 +165,6 @@ export async function runSetupFlow(
     return true;
   }
   if (keyChoice === "3") {
-    const nk = await askSecret("  Paste your NVIDIA API key (Enter to skip): ");
-    if (!nk) return false;
-    cfg.nvidiaApiKey = nk;
-    cfg.provider = "nvidia";
-    await testClient("NVIDIA", createNvidiaClient(cfg, nk));
-    saveDone(cfg);
-    return true;
-  }
-  if (keyChoice === "4") {
     const ok = await askSecret("  Paste your OpenRouter API key (Enter to skip): ");
     if (!ok) return false;
     cfg.openrouterApiKey = ok;
@@ -185,7 +174,7 @@ export async function runSetupFlow(
     return true;
   }
 
-  console.log(bold("  Step 1 — Model API key (unlocks all 8 free models)"));
+  console.log(bold("  Step 1 — Model API key (unlocks all 4 free models)"));
   console.log(dim("    1. Open the provider token page shown by your administrator"));
   console.log(dim("    2. Create an API key — it is shown exactly once — and copy it"));
   console.log(dim("    Your key is typed hidden: it will not appear on screen."));

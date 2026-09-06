@@ -4,9 +4,7 @@
 # Deploy your own:
 #   1. npx wrangler secret put UNOROUTER_API_KEY    # free UnoRouter key (primary)
 #   2. npx wrangler secret put OPENROUTER_API_KEY   # free OpenRouter key (fallback, optional)
-#   3. npx wrangler secret put NVIDIA_API_KEY       # free NVIDIA NIM key, nvapi-… (last resort, optional)
-#   4. npx wrangler deploy
-#   5. Point users at it: set gatewayUrl = https://<you>.workers.dev in ~/.codeshark.json
+#   3. npx wrangler deploy
 #
 # The gateway fails over between providers on 429/errors, waits through
 # rate limits, and queues per-IP bursts instead of dropping them.

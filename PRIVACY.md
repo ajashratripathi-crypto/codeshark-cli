@@ -18,7 +18,7 @@ or project files that you send to an AI provider.
 When you use the shared gateway, your prompts, selected tool definitions, and
 relevant conversation or file content are sent to the gateway and then to one
 or more upstream providers selected by the gateway, including OpenRouter,
-NVIDIA, Google, or
+Google, or
 other providers selected by that service. When you use your own provider key,
 requests go to the provider configured by you.
 

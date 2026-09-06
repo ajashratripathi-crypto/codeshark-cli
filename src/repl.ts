@@ -45,7 +45,7 @@ function printHelp(): void {
       bold("  CodeShark commands"),
       dim("    /help            show this help"),
       dim("    /model           show the active model and the full catalog"),
-      dim("    /model <name>    switch model, e.g. /model glm or /model deepseek"),
+      dim("    /model <name>    switch model, e.g. /model glm or /model minimax"),
       dim("    /keys            open the password-protected local API key page"),
       dim("    /key-status      show masked key status in the terminal"),
       dim("    /setup           guided setup wizard (providers / keys)"),
@@ -79,7 +79,7 @@ export function printModelInfo(): void {
   }
   console.log("");
   console.log(dim("  Switch with: /model <name>"));
-  console.log(dim("  Names: gpt, deepseek, minimax, glm, gemini-3.6, sarvam, gpt-oss, nemotron"));
+  console.log(dim("  Names: glm, gemini-3.6, nemotron, minimax"));
   console.log("");
 }
 
@@ -129,11 +129,9 @@ function printKeys(): void {
   console.log(bold("  API keys"));
   const ur = Boolean(cfg.unorouterApiKey ?? process.env.UNOROUTER_API_KEY);
   const or = Boolean(cfg.openrouterApiKey ?? process.env.OPENROUTER_API_KEY);
-  const nv = Boolean(cfg.nvidiaApiKey ?? process.env.NVIDIA_API_KEY);
   const gm = Boolean(cfg.geminiApiKey ?? process.env.GEMINI_API_KEY);
   console.log(`    ${ur ? hex("#4ade80", "✓") : dim("○")} Model API    ${ur ? dim("(configured)") : dim("(not set)")}  ${dim("key: shown once")}`);
   console.log(`    ${or ? hex("#4ade80", "✓") : dim("○")} OpenRouter   ${or ? dim("(configured)") : dim("(not set)")}  → https://openrouter.ai/keys  ${dim("key: sk-or-v1-…")}`);
-  console.log(`    ${nv ? hex("#4ade80", "✓") : dim("○")} NVIDIA NIM   ${nv ? dim("(configured)") : dim("(not set)")}  → https://build.nvidia.com   ${dim("key: nvapi-…")}`);
   console.log(`    ${gm ? hex("#4ade80", "✓") : dim("○")} Google AI Studio ${gm ? dim("(configured)") : dim("(not set)")}  → https://aistudio.google.com/apikey ${dim("key: AIza…")}`);
   console.log("");
   console.log(dim("  Add one: run /setup, or paste it into ~/.codeshark.json like:"));

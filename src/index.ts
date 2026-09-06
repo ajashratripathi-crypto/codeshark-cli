@@ -233,11 +233,10 @@ async function main(): Promise<void> {
     // API key (recommended), or local Ollama — the same flow as `codeshark setup`.
     const hasProviderSetup =
       Boolean(cfg.provider) ||
-      Boolean(cfg.unorouterApiKey || cfg.openrouterApiKey || cfg.nvidiaApiKey || cfg.geminiApiKey) ||
+      Boolean(cfg.unorouterApiKey || cfg.openrouterApiKey || cfg.geminiApiKey) ||
       Boolean(
         process.env.UNOROUTER_API_KEY ||
           process.env.OPENROUTER_API_KEY ||
-          process.env.NVIDIA_API_KEY ||
           process.env.GEMINI_API_KEY,
       );
     const setupCompleted = cfg.setupCompleted ?? hasProviderSetup;
