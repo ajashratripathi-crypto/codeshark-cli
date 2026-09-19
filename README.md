@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/codeshark-cli)](https://www.npmjs.com/package/codeshark-cli)
 [![license](https://img.shields.io/npm/l/codeshark-cli)](LICENSE)
 
-An open-source coding agent that reads your project, plans the work, edits files, and runs commands—with your approval. Four model choices, one familiar terminal.
+An open-source coding agent that reads your project, plans the work, edits files, and runs commands—with your approval. Six model choices, one familiar terminal.
 
 [Source code](https://github.com/ajashratripathi-crypto/codeshark-cli) | [Quick start](#quick-start) | [Models](#models) | [License](LICENSE)
 
@@ -92,6 +92,8 @@ The catalog is checked at startup, and unavailable models are marked. These cont
 | Gemini 3.6 Flash | 1M | `/model gemini-3.6` |
 | Nemotron 3 Ultra 550B A55B | 256K | `/model nemotron` |
 | MiniMax M2.7 | 128K | `/model minimax` |
+| DeepSeek V4 Flash 0731 | 128K | `/model deepseek-v4-flash-0731` |
+| Muse Glimmer 30B | 128K | `/model muse-glimmer-30b` |
 
 ## Connection and privacy
 
@@ -107,7 +109,7 @@ Publishing is automated: pushing a version tag runs the tests, publishes to npm,
 
 ```bash
 # bump "version" in package.json first, then:
-git tag v0.1.8
+git tag v0.1.9
 git push origin v0.1.8
 ```
 

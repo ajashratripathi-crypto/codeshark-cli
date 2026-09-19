@@ -3,13 +3,15 @@ import assert from "node:assert/strict";
 import { MODELS, RETIRED_MODELS, DEFAULT_MODEL_ID, findModel, isRetiredModel, toApiSlug } from "../dist/models.js";
 import { activeApiModel, activeModelId, activeProvider, modelLabel } from "../dist/config.js";
 
-test("catalog contains exactly the four current models", () => {
+test("catalog contains exactly the six current models", () => {
   const ids = MODELS.map((m) => m.id);
   assert.deepEqual(ids, [
     "unorouter/glm-5.3-flash-think-search",
     "unorouter/gemini-3.6-flash",
     "unorouter/nemotron-3-ultra-550b-a55b",
     "unorouter/minimax-m2.7",
+    "unorouter/deepseek-v4-flash-0731",
+    "unorouter/muse-glimmer-30b",
   ]);
   assert.equal(DEFAULT_MODEL_ID, "unorouter/glm-5.3-flash-think-search");
 });
@@ -35,12 +37,16 @@ test("catalog ids map to the correct raw API slugs", () => {
   assert.equal(toApiSlug("unorouter/gemini-3.6-flash"), "gemini-3.6-flash:free");
   assert.equal(toApiSlug("unorouter/nemotron-3-ultra-550b-a55b"), "nemotron-3-ultra-550b-a55b:free");
   assert.equal(toApiSlug("unorouter/minimax-m2.7"), "minimax-m2.7:free");
+  assert.equal(toApiSlug("unorouter/deepseek-v4-flash-0731"), "deepseek-v4-flash-0731:free");
+  assert.equal(toApiSlug("unorouter/muse-glimmer-30b"), "muse-glimmer-30b:free");
   // Raw slugs pass through untouched.
   assert.equal(toApiSlug("some/custom-model"), "some/custom-model");
 });
 
 test("findModel accepts ids and raw slugs", () => {
   assert.equal(findModel("unorouter/minimax-m2.7")?.provider, "unorouter");
+  assert.equal(findModel("unorouter/deepseek-v4-flash-0731")?.provider, "unorouter");
+  assert.equal(findModel("muse-glimmer-30b:free")?.provider, "unorouter");
   assert.equal(findModel("glm-5.3-flash-think-search:free")?.provider, "unorouter");
   assert.equal(findModel("nope"), undefined);
 });
@@ -48,6 +54,7 @@ test("findModel accepts ids and raw slugs", () => {
 test("activeProvider follows the selected model", () => {
   assert.equal(activeProvider({ model: "unorouter/glm-5.3-flash-think-search" }), "unorouter");
   assert.equal(activeProvider({ model: "unorouter/minimax-m2.7" }), "unorouter");
+  assert.equal(activeProvider({ model: "unorouter/deepseek-v4-flash-0731" }), "unorouter");
   assert.equal(activeModelId({ model: "unorouter/sarvam-30b" }), DEFAULT_MODEL_ID);
   assert.equal(activeModelId({ model: "sarvam-30b:free" }), DEFAULT_MODEL_ID);
   assert.equal(activeProvider({ provider: "gemini", model: "gemini-2.5-pro" }), "gemini");
@@ -55,6 +62,8 @@ test("activeProvider follows the selected model", () => {
 
 test("activeApiModel resolves the API slug for the selection", () => {
   assert.equal(activeApiModel({ model: "unorouter/minimax-m2.7" }), "minimax-m2.7:free");
+  assert.equal(activeApiModel({ model: "unorouter/deepseek-v4-flash-0731" }), "deepseek-v4-flash-0731:free");
+  assert.equal(activeApiModel({ model: "unorouter/muse-glimmer-30b" }), "muse-glimmer-30b:free");
   assert.equal(activeApiModel({}), "glm-5.3-flash-think-search:free");
   assert.equal(activeModelId({}), "unorouter/glm-5.3-flash-think-search");
 });

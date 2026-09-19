@@ -229,7 +229,10 @@ async function parseOpenAIStream(
         const trimmed = line.trim();
         if (trimmed.startsWith("data:")) handleData(trimmed.slice(5).trim());
       }
-      if (doneMarker) break;
+      // Some OpenAI-compatible gateways send finish_reason but keep the
+      // connection open instead of emitting [DONE]. Once the response is
+      // complete, stop waiting so the REPL can return to its prompt.
+      if (doneMarker || completed) break;
     }
     buffer += decoder.decode();
     if (!doneMarker && buffer.trim()) {

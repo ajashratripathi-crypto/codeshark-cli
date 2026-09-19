@@ -29,6 +29,8 @@ jobs:
             "gemini-3.6-flash:free",
             "nemotron-3-ultra-550b-a55b:free",
             "minimax-m2.7:free",
+            "deepseek-v4-flash-0731:free",
+            "muse-glimmer-30b:free",
           ];
 
           // Free lanes are congested often: retry 3x with a 90s timeout

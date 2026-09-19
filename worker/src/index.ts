@@ -43,6 +43,8 @@ const OPENROUTER_ALIASES: Record<string, string> = {
   "gemini-3.6-flash:free": "google/gemini-3.6-flash:free",
   "nemotron-3-ultra-550b-a55b:free": "openrouter/free",
   "minimax-m2.7:free": "minimax/minimax-m2.7:free",
+  "deepseek-v4-flash-0731:free": "openrouter/free",
+  "muse-glimmer-30b:free": "openrouter/free",
 };
 
 const CORS_HEADERS: Record<string, string> = {

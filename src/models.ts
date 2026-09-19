@@ -51,6 +51,22 @@ export const MODELS: ModelInfo[] = [
     context: "128K",
     notes: "Fast general-purpose coding and reasoning.",
   },
+  {
+    id: "unorouter/deepseek-v4-flash-0731",
+    label: "DeepSeek V4 Flash 0731",
+    provider: "unorouter",
+    model: "deepseek-v4-flash-0731:free",
+    context: "128K",
+    notes: "Fast coding and analysis for everyday tasks.",
+  },
+  {
+    id: "unorouter/muse-glimmer-30b",
+    label: "Muse Glimmer 30B",
+    provider: "unorouter",
+    model: "muse-glimmer-30b:free",
+    context: "128K",
+    notes: "Open model for creative and coding workflows.",
+  },
 ];
 
 export const RETIRED_MODELS: ModelInfo[] = [

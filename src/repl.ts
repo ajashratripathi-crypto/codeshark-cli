@@ -307,9 +307,14 @@ export async function startRepl(opts: ReplOptions): Promise<void> {
     busy = false;
     controller = undefined;
     console.log("");
+    // readline can lose the prompt when an async `line` listener finishes
+    // while input was resumed for Ctrl+C/tool approvals. Re-apply the prompt
+    // on the next turn of the event loop, after the response has flushed.
     if (!replClosed(rl)) {
       rl.resume();
-      rl.prompt();
+      setImmediate(() => {
+        if (!replClosed(rl) && !busy) rl.prompt();
+      });
     }
   });
 
